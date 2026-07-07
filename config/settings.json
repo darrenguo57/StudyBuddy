@@ -1,0 +1,50 @@
+{
+  "camera": {
+    "index": 0,
+    "resolution": [1280, 720],
+    "record_fps": 15
+  },
+  "posture": {
+    "head_forward_angle": 25,
+    "head_tilt_angle": 12,
+    "body_tilt_angle": 10,
+    "too_close_z": -0.15,
+    "confirm_frames": 3,
+    "critical_seconds": 5
+  },
+  "focus": {
+    "ear_threshold": 0.2,
+    "blink_rate_high": 35,
+    "blink_rate_low": 5,
+    "gaze_weight": 0.4,
+    "blink_weight": 0.2,
+    "head_pose_weight": 0.3,
+    "drowsy_blink_threshold": 30,
+    "drowsy_ear_threshold": 0.15
+  },
+  "voice": {
+    "remind_cooldown": 30,
+    "max_reminds_per_session": 10,
+    "encourage_interval_minutes": 15,
+    "ref_voice_path": "G:\\StudyBuddy\\voice_samples\\reference_01.wav"
+  },
+  "scoring": {
+    "expected_duration_minutes": 40,
+    "posture_rate_weight": 0.4,
+    "focus_rate_weight": 0.25,
+    "efficiency_weight": 0.2,
+    "correction_rate_weight": 0.15
+  },
+  "video": {
+    "speed_factor": 4,
+    "output_fps": 30,
+    "output_bitrate": "2000k"
+  },
+  "rewards": [
+    {"threshold": 100, "name": "多玩15分钟"},
+    {"threshold": 200, "name": "选晚餐菜单"},
+    {"threshold": 350, "name": "周末去公园"},
+    {"threshold": 500, "name": "买一本喜欢的书"},
+    {"threshold": 800, "name": "去游乐场"}
+  ]
+}

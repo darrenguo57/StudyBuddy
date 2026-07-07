@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-*
+
+# 项目数据
+data/
+recordings/
+reviews/
+snapshots/
+logs/
+output/
+temp/
+
+# 大模型文件
+*.gguf
+*.bin
+models/
+*.onnx
+
+# 录音样本
+voice_samples/
+*.wav
+!assets/*.wav
+
+# 环境变量
+.env
+*.env.local
+
+# 操作系统
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 临时文件
+*.tmp
+*.temp
+temp_*
+
+# Trae内部文档
+.trae/
