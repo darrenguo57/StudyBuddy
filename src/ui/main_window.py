@@ -260,19 +260,24 @@ class MainWindow(QMainWindow):
         # 全局样式
         self.setStyleSheet(global_stylesheet())
 
-        # 初始化核心模块
-        self._init_core(db_path)
+        # ===== Phase 1: 摄像头优先（快速创建） =====
+        self._init_camera()
 
-        # 构建 UI
+        # ===== Phase 2: 数据库（快速） =====
+        self._init_db(db_path)
+        self._core_ready = False  # 重模块初始化的就绪标记
+
+        # ===== Phase 3: 构建 UI（仅依赖 camera 和 db） =====
         self._init_ui()
 
-        # 摄像头连接信号
+        # ===== Phase 4: 立即启动摄像头连接（后台线程，不阻塞 UI） =====
         self._camera_connected_signal.connect(self._on_camera_connected)
+        self._do_start_camera_preview()
 
-        # 自动连接摄像头预览
-        self._start_camera_preview()
+        # ===== Phase 5: 耗时模块后台加载 =====
+        self._init_heavy_async(db_path)
 
-        # 定时器
+        # ===== Phase 6: 定时器 =====
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_timer_tick)
         self._timer.start(1000)
@@ -280,69 +285,86 @@ class MainWindow(QMainWindow):
         self._session_start_time = None
         self._session_seconds = 0
 
-    def _init_core(self, db_path: Path):
-        """初始化核心模块"""
+        # 基础运行状态标志（定时器回调依赖，需提前初始化）
+        self._is_running = False
+        self._is_paused = False
+
+    def _init_camera(self):
+        """仅创建摄像头管理器（不连接，不探测）"""
         import json
         config_path = Path(__file__).resolve().parent.parent.parent / "config" / "settings.json"
         if config_path.exists():
             with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
+                self._config = json.load(f)
         else:
-            config = {}
+            self._config = {}
 
-        self.db = Database(db_path)
-
-        camera_cfg = config.get("camera", {})
+        camera_cfg = self._config.get("camera", {})
         self.camera = CameraManager(
             CameraConfig(
                 index=camera_cfg.get("index", 0),
-                resolution=tuple(camera_cfg.get("resolution", [1280, 720])),
                 record_fps=camera_cfg.get("record_fps", 15),
             ),
             Path(__file__).resolve().parent.parent.parent / "recordings",
         )
 
-        self.detector = PostureDetector(config=config.get("posture", {}))
-        self.focus_detector = FocusDetector(config=config.get("focus", {}))
-        self.voice = AudioPlayer()
-        self.scoring = ScoringEngine(config=config.get("scoring", {}))
-        video_cfg = config.get("video", {})
+    def _init_db(self, db_path: Path):
+        """数据库初始化（快速）"""
+        self.db = Database(db_path)
+        self._db_path = db_path
 
-        # 从数据库加载 BGM 路径和封面配置
-        db_cfg = self.db.get_all_configs()
-        bgm_path = db_cfg.get("bgm_path", "")
-        if bgm_path and not Path(bgm_path).exists():
-            bgm_path = ""  # 文件不存在则回退
+    def _init_heavy_async(self, db_path: Path):
+        """耗时核心模块在后台线程初始化（不阻塞 UI 和摄像头预览）"""
+        config = self._config
 
-        self.clipper = VideoClipper(ClipConfig(
-            effective_speed=video_cfg.get("speed_factor", 4.0),
-            output_fps=video_cfg.get("output_fps", 30),
-            bitrate=video_cfg.get("output_bitrate", "4000k"),
-            cover_enabled=db_cfg.get("cover_enabled", True),
-            cover_text=db_cfg.get("cover_text", "Mila作业Vlog-第一期"),
-            cover_image_path=db_cfg.get("cover_image_path", ""),
-            bgm_path=bgm_path,
-            bgm_volume=float(db_cfg.get("bgm_volume", 12)) / 100.0,
-        ))
+        def _worker():
+            logger.info("后台加载核心模块…")
+            # 姿势检测器
+            self.detector = PostureDetector(config=config.get("posture", {}))
+            # 专注度检测器（Face Mesh 初始化 ~1.5s，是主要耗时项）
+            self.focus_detector = FocusDetector(config=config.get("focus", {}))
+            # 语音播报
+            self.voice = AudioPlayer()
+            # 评分引擎
+            self.scoring = ScoringEngine(config=config.get("scoring", {}))
+            # 视频剪辑器
+            video_cfg = config.get("video", {})
+            db_cfg = self.db.get_all_configs()
+            bgm_path = db_cfg.get("bgm_path", "")
+            if bgm_path and not Path(bgm_path).exists():
+                bgm_path = ""
+            self.clipper = VideoClipper(ClipConfig(
+                effective_speed=video_cfg.get("speed_factor", 4.0),
+                output_fps=video_cfg.get("output_fps", 30),
+                bitrate=video_cfg.get("output_bitrate", "4000k"),
+                cover_enabled=db_cfg.get("cover_enabled", True),
+                cover_text=db_cfg.get("cover_text", "Mila作业Vlog-第一期"),
+                cover_image_path=db_cfg.get("cover_image_path", ""),
+                bgm_path=bgm_path,
+                bgm_volume=float(db_cfg.get("bgm_volume", 12)) / 100.0,
+            ))
 
-        self._session_id = None
-        self._is_running = False
-        self._is_paused = False
-        self._posture_events = []
-        self._focus_events = []
-        self._violation_last_ts: Dict[str, float] = {}  # 同类型违规5秒去重
+            self._session_id = None
+            self._is_running = False
+            self._is_paused = False
+            self._posture_events = []
+            self._focus_events = []
+            self._violation_last_ts: Dict[str, float] = {}
 
-        # 线程安全锁
-        self._posture_lock = threading.Lock()
-        self._focus_lock = threading.Lock()
-        self._latest_posture = None  # PostureResult or None
-        self._latest_focus = None    # FocusResult or None
-        self._posture_frame_skip = 0  # 跳帧计数器
+            self._posture_lock = threading.Lock()
+            self._focus_lock = threading.Lock()
+            self._latest_posture = None
+            self._latest_focus = None
+            self._posture_frame_skip = 0
 
-        # 启动时检查音频文件是否存在
-        from core.audio_player import ensure_audio_exists
-        if not ensure_audio_exists():
-            logger.warning("预录制音频文件缺失！请运行 scripts/generate_audio.py 生成语音文件。")
+            from core.audio_player import ensure_audio_exists
+            if not ensure_audio_exists():
+                logger.warning("预录制音频文件缺失！请运行 scripts/generate_audio.py 生成语音文件。")
+
+            self._core_ready = True
+            logger.info("核心模块全部就绪")
+
+        threading.Thread(target=_worker, daemon=True, name="core-init").start()
 
     # ──────────────────────────────────────────
     # UI 构建
@@ -612,6 +634,9 @@ class MainWindow(QMainWindow):
 
     def _on_start(self):
         """开始作业会话"""
+        if not getattr(self, '_core_ready', False):
+            QMessageBox.information(self, "请稍候", "核心模块正在加载中，请稍后再试…")
+            return
         if not self.camera.is_connected:
             if not self.camera.connect():
                 QMessageBox.warning(self, "摄像头未就绪", "无法打开摄像头，请检查设备连接。")
@@ -1096,6 +1121,9 @@ class MainWindow(QMainWindow):
             self.status_panel.set_message("回顾视频已生成！")
             self.btn_review.setEnabled(True)
             logger.info(f"回顾视频生成完成: {video_path}")
+
+            # 清理原始文件：只保留剪辑好的回顾视频
+            self._cleanup_raw_files(raw_path_str, video_path)
         else:
             # 剪辑失败或跳过，标记为完成但无回顾视频
             self.db.end_session(
@@ -1115,6 +1143,57 @@ class MainWindow(QMainWindow):
             logger.warning("回顾视频生成失败")
 
         self._refresh_history()
+
+    def _cleanup_raw_files(self, raw_path_str: str, review_path_str: str):
+        """剪辑成功后清理原始录像、音频、过程文件，仅保留回顾视频"""
+        review_path = Path(review_path_str)
+        raw_path = Path(raw_path_str) if raw_path_str else None
+        deleted = []
+        skipped = []
+
+        def _safe_remove(p: Path, label: str):
+            if p.exists() and p.resolve() != review_path.resolve():
+                try:
+                    p.unlink()
+                    deleted.append(label)
+                    logger.info(f"已清理: {p}")
+                except OSError as e:
+                    skipped.append(f"{label} ({e})")
+                    logger.warning(f"清理失败: {p} - {e}")
+
+        if raw_path and raw_path.exists():
+            raw_stem = raw_path.stem
+            raw_dir = raw_path.parent
+
+            # 原始录像
+            _safe_remove(raw_path, "原始录像")
+
+            # 合并过程的音频文件
+            audio_wav = raw_dir / f"audio_{raw_stem.split('_')[0] if '_' in raw_stem else raw_stem}.wav"
+            _safe_remove(audio_wav, "音频WAV")
+
+            # 合并后的过程 MP4（原始 AVI 被 merge 替换后，合并版以 _audio.mp4 结尾）
+            merged_mp4 = raw_dir / f"{raw_stem}_audio.mp4"
+            _safe_remove(merged_mp4, "合并MP4")
+
+            # 封面帧图片
+            cover_png = raw_dir / f"cover_{raw_stem}.png"
+            _safe_remove(cover_png, "封面PNG")
+
+            # 同目录下同时间戳的其他临时文件 (audio_xxx.wav)
+            raw_dir_path = raw_dir
+            try:
+                timestamp_prefix = raw_stem.split('_')[0] if '_' in raw_stem else ""
+                if timestamp_prefix and len(timestamp_prefix) >= 14:  # YYYYMMDD_HHMMSS
+                    for f in raw_dir_path.glob(f"audio_{timestamp_prefix}*.wav"):
+                        _safe_remove(f, f"音频WAV({f.name})")
+            except Exception:
+                pass
+
+        if deleted:
+            logger.info(f"清理完成: 删除了 {len(deleted)} 个文件 ({', '.join(deleted)})")
+        if skipped:
+            logger.warning(f"清理部分失败: {', '.join(skipped)}")
 
     def _on_clip_error(self, error_msg: str):
         """剪辑错误回调"""

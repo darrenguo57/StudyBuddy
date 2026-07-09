@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>StudyBuddy · 学习助手</title>
+<style>
+:root {
+  --bg: #FAFAF8;
+  --surface: #FFFFFF;
+  --ink: #1C1C1E;
+  --muted: #6E6E73;
+  --rule: #E5E5EA;
+  --accent: #E8753A;
+  --accent2: #34C759;
+  --accent3: #0A84FF;
+  --warm: #FFF5EE;
+  --green-bg: #F0FFF4;
+}
+* { box-sizing:border-box;margin:0;padding:0; }
+body {
+  font-family: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  background: var(--bg); color: var(--ink);
+  font-size: 15px; line-height: 1.6;
+  padding: 12px;
+  padding-bottom: 100px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Header */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0; margin-bottom: 12px;
+}
+.header h1 { font-size: 20px; font-weight: 700; }
+.header .status-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent2); animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* Connection bar */
+.conn-bar {
+  background: var(--surface); border-radius: 12px;
+  padding: 10px 14px; margin-bottom: 12px;
+  border: 1px solid var(--rule);
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; color: var(--muted);
+}
+.conn-bar .addr { font-family: monospace; color: var(--accent3); font-weight: 600; }
+
+/* Tabs */
+.tabs {
+  display: flex; gap: 0; margin-bottom: 12px;
+  background: var(--surface); border-radius: 12px;
+  overflow: hidden; border: 1px solid var(--rule);
+}
+.tab {
+  flex: 1; text-align: center; padding: 10px 0;
+  font-size: 14px; font-weight: 600; color: var(--muted);
+  cursor: pointer; transition: all .2s;
+  border-bottom: 2px solid transparent;
+}
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Card */
+.card {
+  background: var(--surface); border-radius: 14px;
+  padding: 16px; margin-bottom: 12px;
+  border: 1px solid var(--rule);
+}
+.card h3 { font-size: 16px; margin-bottom: 10px; }
+
+/* Day selector */
+.day-selector {
+  display: flex; gap: 4px; overflow-x: auto;
+  padding: 4px 0; margin-bottom: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+.day-btn {
+  flex-shrink: 0; width: 38px; height: 38px;
+  border-radius: 50%; border: 2px solid var(--rule);
+  background: var(--surface); font-size: 13px;
+  font-weight: 700; display: flex; align-items: center;
+  justify-content: center; cursor: pointer;
+  transition: all .15s;
+}
+.day-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.day-btn.done { background: var(--green-bg); border-color: var(--accent2); }
+
+/* Task item */
+.task-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+}
+.task-item:last-child { border-bottom: none; }
+.task-check {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 2px solid var(--rule); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px; transition: all .2s;
+}
+.task-check.done {
+  background: var(--accent2); border-color: var(--accent2);
+  color: #fff; font-size: 13px;
+}
+.task-body { flex: 1; }
+.task-name { font-size: 14px; font-weight: 500; }
+.task-meta {
+  font-size: 12px; color: var(--muted); margin-top: 2px;
+  display: flex; gap: 8px;
+}
+.tag {
+  display: inline-block; padding: 1px 6px; border-radius: 4px;
+  font-size: 11px; font-weight: 600;
+}
+.tag-math { background:#FFF0E8;color:#C45F2E }
+.tag-chinese { background:#FFF3E0;color:#E65100 }
+.tag-english,.tag-eng { background:#E8F0FF;color:#0A5FBF }
+.tag-pe { background:#E8F5E9;color:#2E7D32 }
+
+/* Camera */
+.camera-area {
+  position: relative; border-radius: 14px;
+  overflow: hidden; background: #000;
+  aspect-ratio: 16/9;
+}
+.camera-area video {
+  width: 100%; height: 100%; object-fit: cover;
+  display: block;
+}
+.camera-area .overlay {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 8px; background: linear-gradient(transparent, rgba(0,0,0,.6));
+  color: #fff; font-size: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.rec-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #FF3B30; animation: pulse 1s infinite;
+}
+
+/* Timer */
+.timer-display {
+  font-size: 36px; font-weight: 700; text-align: center;
+  font-variant-numeric: tabular-nums; padding: 16px 0;
+}
+.timer-controls {
+  display: flex; gap: 10px; justify-content: center;
+}
+.btn {
+  padding: 10px 24px; border-radius: 10px; border: none;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+  transition: all .15s;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-success { background: var(--accent2); color: #fff; }
+.btn-outline { background: var(--surface); color: var(--ink); border: 1.5px solid var(--rule); }
+.btn:active { transform: scale(.96); opacity: .85; }
+
+/* Progress */
+.progress-bar {
+  height: 6px; border-radius: 3px; background: var(--rule);
+  margin: 8px 0; overflow: hidden;
+}
+.progress-fill {
+  height: 100%; border-radius: 3px; background: var(--accent);
+  transition: width .3s;
+}
+
+/* Bottom bar */
+.bottom-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface); border-top: 1px solid var(--rule);
+  padding: 12px 16px 20px; z-index: 10;
+  display: flex; gap: 10px;
+}
+.bottom-bar .btn { flex: 1; }
+
+/* Summary */
+.summary-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.summary-item {
+  background: var(--bg); border-radius: 10px;
+  padding: 12px; text-align: center; border: 1px solid var(--rule);
+}
+.summary-item .val { font-size: 22px; font-weight: 700; }
+.summary-item .lbl { font-size: 12px; color: var(--muted); }
+
+/* Phase label */
+.phase-label {
+  font-size: 12px; color: var(--muted); margin-bottom: 8px;
+  text-align: center;
+}
+
+/* Hidden sections */
+.page { display: none; }
+.page.active { display: block; }
+
+/* Toast */
+.toast {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: #fff; padding: 10px 20px;
+  border-radius: 10px; font-size: 14px; z-index: 100;
+  opacity: 0; transition: opacity .3s;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>StudyBuddy</h1>
+  <span class="status-dot" id="statusDot" title="已连接"></span>
+</div>
+
+<div class="conn-bar" id="connBar">
+  <span>📱 连接到</span>
+  <span class="addr" id="serverAddr">--</span>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-page="schedule">📋 作业</div>
+  <div class="tab" data-page="timer">⏱ 计时</div>
+  <div class="tab" data-page="tutor">🤖 辅导</div>
+  <div class="tab" data-page="camera">📷 拍摄</div>
+  <div class="tab" data-page="summary">📊 总结</div>
+</div>
+
+<!-- 作业排程 -->
+<div class="page active" id="page-schedule">
+  <div class="phase-label" id="phaseLabel"></div>
+  <div class="day-selector" id="daySelector"></div>
+  <div class="card">
+    <div id="taskList">
+      <p style="color:var(--muted);text-align:center;padding:20px">加载中...</p>
+    </div>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" id="dayProgress" style="width:0%"></div>
+  </div>
+  <p style="font-size:12px;color:var(--muted);text-align:center" id="progressText">0/0 已完成</p>
+</div>
+
+<!-- 番茄钟 -->
+<div class="page" id="page-timer">
+  <div class="card">
+    <div class="timer-display" id="timerDisplay">25:00</div>
+    <div class="timer-controls">
+      <button class="btn btn-outline" onclick="resetTimer()">重置</button>
+      <button class="btn btn-primary" id="timerBtn" onclick="toggleTimer()">开始</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>当前任务</h3>
+    <p id="currentTaskName" style="color:var(--muted)">选择一个任务开始计时</p>
+  </div>
+  <p style="font-size:12px;color:var(--muted);text-align:center">
+    完成一个番茄钟 = 25分钟专注 + 5分钟休息
+  </p>
+</div>
+
+<!-- AI 辅导 -->
+<div class="page" id="page-tutor">
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <h3 style="margin:0">AI 学习辅导</h3>
+      <span id="tutorStatus" style="font-size:12px;color:var(--muted);">检测中...</span>
+    </div>
+    <select id="tutorSubject" style="width:100%;padding:10px;border:1px solid var(--rule);border-radius:8px;margin-bottom:10px;font-size:14px;background:var(--surface);">
+      <option value="">通用问题</option>
+      <option value="数学">数学</option>
+      <option value="语文">语文</option>
+      <option value="英语">英语</option>
+    </select>
+    <textarea id="tutorInput" placeholder="输入你的问题，比如：这道应用题怎么做？教我完成这篇阅读理解……" style="width:100%;height:80px;padding:10px;border:1px solid var(--rule);border-radius:8px;font-size:14px;resize:none;background:var(--surface);"></textarea>
+    <button class="btn btn-primary" onclick="askTutor()" style="width:100%;margin-top:8px;">提问</button>
+    <div id="tutorAnswer" style="margin-top:12px;padding:12px;background:var(--warm);border-radius:8px;font-size:14px;line-height:1.8;display:none;white-space:pre-wrap;"></div>
+  </div>
+</div>
+
+<!-- 摄像头 -->
+<div class="page" id="page-camera">
+  <div class="camera-area" id="cameraArea">
+    <video id="cameraVideo" autoplay playsinline muted></video>
+    <div class="overlay" id="recOverlay" style="display:none">
+      <span class="rec-dot"></span>
+      <span id="recTime">00:00</span>
+    </div>
+  </div>
+  <div style="padding:8px 0;text-align:center">
+    <button class="btn btn-outline" id="camBtn" onclick="toggleCamera()">打开摄像头</button>
+  </div>
+</div>
+
+<!-- 总结 -->
+<div class="page" id="page-summary">
+  <div class="card">
+    <h3>今日学习总结</h3>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <div class="val" id="sumDuration">0</div>
+        <div class="lbl">分钟学习</div>
+      </div>
+      <div class="summary-item">
+        <div class="val" id="sumTasks">0</div>
+        <div class="lbl">已完成</div>
+      </div>
+      <div class="summary-item">
+        <div class="val" id="sumPomodoros">0</div>
+        <div class="lbl">番茄钟</div>
+      </div>
+      <div class="summary-item">
+        <div class="val" id="sumScore">--</div>
+        <div class="lbl">评分</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 底部操作栏 -->
+<div class="bottom-bar">
+  <button class="btn btn-outline" onclick="prevDay()">前一天</button>
+  <button class="btn btn-success" id="startSessionBtn" onclick="startSession()">开始学习</button>
+  <button class="btn btn-outline" onclick="nextDay()">后一天</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ========== 状态管理 ==========
+const STATE = {
+  serverUrl: window.location.origin,
+  scheduleData: [],
+  currentDay: 0,
+  taskProgress: {},   // { `${day}-${taskIdx}`: true }
+  timerSeconds: 25 * 60,
+  timerRunning: false,
+  timerInterval: null,
+  cameraStream: null,
+  ws: null,
+  connected: false,
+};
+
+// ========== 初始化 ==========
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('serverAddr').textContent = STATE.serverUrl;
+  setupTabs();
+  connectWS();
+  fetchSchedule();
+  checkTutorStatus();
+  updateTimerDisplay();
+});
+
+// Tabs
+function setupTabs() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('page-' + tab.dataset.page).classList.add('active');
+    });
+  });
+}
+
+// ========== WebSocket ==========
+function connectWS() {
+  const wsUrl = STATE.serverUrl.replace('http', 'ws') + '/ws/mobile';
+  STATE.ws = new WebSocket(wsUrl);
+  STATE.ws.onopen = () => {
+    STATE.connected = true;
+    document.getElementById('statusDot').style.background = 'var(--accent2)';
+  };
+  STATE.ws.onclose = () => {
+    STATE.connected = false;
+    document.getElementById('statusDot').style.background = '#FF3B30';
+    setTimeout(connectWS, 3000);
+  };
+  STATE.ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'pong') { /* keepalive */ }
+    } catch(e) {}
+  };
+}
+
+// ========== 排程加载 ==========
+async function fetchSchedule() {
+  try {
+    const res = await fetch('/api/schedule');
+    const data = await res.json();
+    STATE.scheduleData = data.plans || [];
+    // 加载服务器端进度
+    await loadServerProgress();
+    // 默认显示第1天
+    STATE.currentDay = 0;
+    renderDaySelector();
+    selectDay(0);
+    updateSummary();
+  } catch(e) {
+    document.getElementById('taskList').innerHTML =
+      '<p style="color:#FF3B30;text-align:center;padding:20px">加载失败，请确认已连接服务器</p>';
+  }
+}
+
+// ========== 从服务器加载进度 ==========
+async function loadServerProgress() {
+  try {
+    STATE.taskProgress = {};
+    for (let i = 0; i < STATE.scheduleData.length; i++) {
+      const dayNum = i + 1;
+      try {
+        const res = await fetch(`/api/homework/day/${dayNum}`);
+        const d = await res.json();
+        if (d.success && d.data && d.data.tasks) {
+          d.data.tasks.forEach((t, ti) => {
+            if (t.is_done) STATE.taskProgress[`${i}-${ti}`] = true;
+          });
+        }
+      } catch(e) { /* 某天未初始化，跳过 */ }
+    }
+    renderDaySelector();
+    renderTasks();
+  } catch(e) {
+    // 回退 localStorage
+    loadProgress();
+  }
+}
+
+// ========== AI 辅导 ==========
+async function checkTutorStatus() {
+  try {
+    const res = await fetch('/api/tutor/status');
+    const d = await res.json();
+    document.getElementById('tutorStatus').textContent =
+      d.available ? '🟢 已就绪' : '⚪ 未连接（需要启动 Ollama）';
+    document.getElementById('tutorStatus').style.color =
+      d.available ? 'var(--accent2)' : 'var(--muted)';
+  } catch(e) {
+    document.getElementById('tutorStatus').textContent = '检测失败';
+  }
+}
+
+async function askTutor() {
+  const input = document.getElementById('tutorInput').value.trim();
+  if (!input) return;
+  const answerDiv = document.getElementById('tutorAnswer');
+  answerDiv.style.display = 'block';
+  answerDiv.textContent = '正在思考...';
+  try {
+    const res = await fetch('/api/tutor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question: input,
+        subject: document.getElementById('tutorSubject').value
+      })
+    });
+    const d = await res.json();
+    if (d.success) {
+      answerDiv.textContent = d.answer;
+    } else {
+      answerDiv.textContent = '出错了：' + (d.error || '未知错误');
+    }
+  } catch(e) {
+    answerDiv.textContent = '请求失败，请检查网络连接';
+  }
+}
+
+// ========== 日期选择器 ==========
+function renderDaySelector() {
+  const container = document.getElementById('daySelector');
+  const days = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30];
+  container.innerHTML = days.map(d => {
+    const cls = d === STATE.currentDay + 1 ? 'active' : getDayBtnClass(d - 1);
+    return `<div class="day-btn ${cls}" onclick="selectDay(${d-1})">${d}</div>`;
+  }).join('');
+}
+
+function getDayBtnClass(idx) {
+  if (idx < 0 || idx >= STATE.scheduleData.length) return '';
+  const plan = STATE.scheduleData[idx];
+  const tasks = plan.tasks || [];
+  const done = tasks.filter((t, i) => STATE.taskProgress[`${idx}-${i}`]).length;
+  return done === tasks.length && tasks.length > 0 ? 'done' : '';
+}
+
+function selectDay(idx) {
+  STATE.currentDay = idx;
+  renderDaySelector();
+  renderTasks();
+}
+
+function prevDay() { if (STATE.currentDay > 0) selectDay(STATE.currentDay - 1); }
+function nextDay() { if (STATE.currentDay < STATE.scheduleData.length - 1) selectDay(STATE.currentDay + 1); }
+
+// ========== 任务列表 ==========
+function renderTasks() {
+  const plan = STATE.scheduleData[STATE.currentDay];
+  if (!plan) {
+    document.getElementById('taskList').innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">无数据</p>';
+    return;
+  }
+
+  document.getElementById('phaseLabel').textContent = plan.phase || '';
+
+  const tasks = plan.tasks || [];
+  if (tasks.length === 0) {
+    document.getElementById('taskList').innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">今日无作业</p>';
+    updateProgress(0, 0);
+    return;
+  }
+
+  const html = tasks.map((t, i) => {
+    const done = STATE.taskProgress[`${STATE.currentDay}-${i}`];
+    return `
+      <div class="task-item" onclick="toggleTask(${i})">
+        <div class="task-check ${done ? 'done' : ''}">${done ? '✓' : ''}</div>
+        <div class="task-body">
+          <div class="task-name">${t.description}</div>
+          <div class="task-meta">
+            <span class="tag tag-${t.subject}">${subjectLabel(t.subject)}</span>
+            <span>${t.category}</span>
+            <span>约${t.duration_minutes}分钟</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('taskList').innerHTML = html;
+  updateProgress(
+    tasks.filter((t, i) => STATE.taskProgress[`${STATE.currentDay}-${i}`]).length,
+    tasks.length
+  );
+}
+
+function toggleTask(idx) {
+  const dayNumber = STATE.currentDay + 1;
+  const key = `${STATE.currentDay}-${idx}`;
+  STATE.taskProgress[key] = !STATE.taskProgress[key];
+  saveProgress();
+  renderTasks();
+  renderDaySelector();
+  updateSummary();
+  // 同步到服务器
+  fetch('/api/homework/toggle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ day_number: dayNumber, task_index: idx })
+  }).catch(() => {});
+}
+
+function updateProgress(done, total) {
+  const pct = total > 0 ? Math.round(done / total * 100) : 0;
+  document.getElementById('dayProgress').style.width = pct + '%';
+  document.getElementById('progressText').textContent = `${done}/${total} 已完成`;
+}
+
+function subjectLabel(s) {
+  const map = { math: '数学', chinese: '语文', english: '英语', pe: '体育' };
+  return map[s] || s;
+}
+
+// ========== 进度持久化 ==========
+function saveProgress() {
+  try {
+    localStorage.setItem('sb_progress', JSON.stringify(STATE.taskProgress));
+  } catch(e) {}
+}
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem('sb_progress');
+    if (raw) STATE.taskProgress = JSON.parse(raw);
+  } catch(e) {}
+}
+
+// ========== 番茄钟 ==========
+function toggleTimer() {
+  if (STATE.timerRunning) {
+    pauseTimer();
+  } else {
+    startTimer();
+  }
+}
+
+function startTimer() {
+  STATE.timerRunning = true;
+  document.getElementById('timerBtn').textContent = '暂停';
+  STATE.timerInterval = setInterval(() => {
+    STATE.timerSeconds--;
+    updateTimerDisplay();
+    if (STATE.timerSeconds <= 0) {
+      timerDone();
+    }
+  }, 1000);
+}
+
+function pauseTimer() {
+  STATE.timerRunning = false;
+  document.getElementById('timerBtn').textContent = '继续';
+  clearInterval(STATE.timerInterval);
+}
+
+function resetTimer() {
+  pauseTimer();
+  STATE.timerSeconds = 25 * 60;
+  updateTimerDisplay();
+  document.getElementById('timerBtn').textContent = '开始';
+}
+
+function updateTimerDisplay() {
+  const m = Math.floor(STATE.timerSeconds / 60);
+  const s = STATE.timerSeconds % 60;
+  document.getElementById('timerDisplay').textContent =
+    `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function timerDone() {
+  clearInterval(STATE.timerInterval);
+  STATE.timerRunning = false;
+  STATE.timerSeconds = 5 * 60; // 休息5分钟
+  updateTimerDisplay();
+  document.getElementById('timerBtn').textContent = '休息';
+  showToast('🍅 番茄钟完成！休息5分钟吧~');
+}
+
+// ========== 摄像头 ==========
+function toggleCamera() {
+  if (STATE.cameraStream) {
+    stopCamera();
+  } else {
+    startCamera();
+  }
+}
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    STATE.cameraStream = stream;
+    const video = document.getElementById('cameraVideo');
+    video.srcObject = stream;
+    document.getElementById('camBtn').textContent = '关闭摄像头';
+    document.getElementById('camBtn').classList.add('btn-primary');
+    document.getElementById('camBtn').classList.remove('btn-outline');
+  } catch(e) {
+    showToast('无法访问摄像头: ' + e.message);
+  }
+}
+
+function stopCamera() {
+  if (STATE.cameraStream) {
+    STATE.cameraStream.getTracks().forEach(t => t.stop());
+    STATE.cameraStream = null;
+  }
+  document.getElementById('cameraVideo').srcObject = null;
+  document.getElementById('camBtn').textContent = '打开摄像头';
+  document.getElementById('camBtn').classList.remove('btn-primary');
+  document.getElementById('camBtn').classList.add('btn-outline');
+}
+
+// ========== 开始/结束学习 ==========
+function startSession() {
+  showToast('学习会话已开始！坐姿和专注度监控已启用');
+  if (!STATE.cameraStream) startCamera();
+}
+
+// ========== Toast ==========
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+// ========== 总结 ==========
+async function updateSummary() {
+  try {
+    const res = await fetch('/api/homework/summary');
+    const d = await res.json();
+    if (d.success) {
+      document.getElementById('sumTasks').textContent = d.data.done_tasks;
+      document.getElementById('sumDuration').textContent = Math.round(d.data.done_tasks * 15);
+      document.getElementById('sumPomodoros').textContent = Math.ceil(d.data.done_tasks / 4);
+      document.getElementById('sumScore').textContent = d.data.progress_pct + '%';
+    }
+  } catch(e) {}
+}
+
+// 定期 ping
+setInterval(() => {
+  if (STATE.ws && STATE.ws.readyState === WebSocket.OPEN) {
+    STATE.ws.send(JSON.stringify({ type: 'ping' }));
+  }
+}, 30000);
+</script>
+</body>
+</html>

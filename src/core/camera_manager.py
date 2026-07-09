@@ -40,6 +40,7 @@ class CameraManager:
         self.recording_dir.mkdir(parents=True, exist_ok=True)
 
         self._cap: Optional[cv2.VideoCapture] = None
+        self._current_resolution = None
         self._writer = None
         self._recording = False
         self._paused = False
@@ -91,141 +92,96 @@ class CameraManager:
         nz_ratio = np.count_nonzero(frame) / frame.size * 100
         return nz_ratio < nz_threshold
 
-    def _try_recovery_settings(self, cap: cv2.VideoCapture) -> bool:
-        """尝试恢复设置：亮度/曝光/增益拉满，强制 MJPG 格式。"""
-        try:
-            cap.set(cv2.CAP_PROP_BRIGHTNESS, 255)
-            cap.set(cv2.CAP_PROP_EXPOSURE, -2)
-            cap.set(cv2.CAP_PROP_GAIN, 255)
-            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-            import time as _time
-            _time.sleep(0.3)
-            # 预热
-            for _ in range(10):
-                cap.read()
-            ret, frame = cap.read()
-            if ret and frame is not None and not self._is_near_black(frame):
-                logger.info("恢复设置成功：亮度/曝光/增益调整 + MJPG 强制")
-                return True
-        except Exception as e:
-            logger.debug(f"恢复设置失败: {e}")
-        return False
-
     def connect(self) -> bool:
         if self.is_connected:
             return True
         try:
-            import sys
-            backends = []
-            if sys.platform == "win32":
-                backends = [cv2.CAP_DSHOW, cv2.CAP_MSMF]
-            else:
-                backends = [cv2.CAP_ANY]
+            import time as _time
 
-            for backend in backends:
-                backend_name = {
-                    cv2.CAP_DSHOW: "DirectShow",
-                    cv2.CAP_MSMF: "MSMF",
-                    cv2.CAP_ANY: "默认",
-                }.get(backend, str(backend))
+            # 候选分辨率列表（从高到低）
+            _CANDIDATE_RESOLUTIONS = [
+                (1920, 1080),
+                (1280, 720),
+                (960, 540),
+                (800, 600),
+                (640, 480),
+            ]
+
+            for backend in [cv2.CAP_DSHOW, cv2.CAP_MSMF]:
+                backend_name = "DirectShow" if backend == cv2.CAP_DSHOW else "MSMF"
                 logger.info(f"尝试后端: {backend_name}")
 
+                # 先打开确认摄像头可用，读取默认分辨率
                 cap = cv2.VideoCapture(self.config.index, backend)
                 if not cap.isOpened():
-                    logger.info(f"  {backend_name} 无法打开")
+                    logger.info(f"  {backend_name} 无法打开设备")
                     cap.release()
                     continue
 
-                # 读取默认分辨率帧
-                ret, test_frame = cap.read()
-                if not ret or test_frame is None:
+                ret, default_frame = cap.read()
+                if not ret or default_frame is None:
                     logger.info(f"  {backend_name} 无法读取帧")
                     cap.release()
                     continue
 
                 default_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 default_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                default_nz = np.count_nonzero(test_frame) / test_frame.size * 100
+                default_nz = np.count_nonzero(default_frame) / default_frame.size * 100
                 logger.info(
-                    f"  {backend_name} 默认帧: {default_w}x{default_h}, "
-                    f"max={test_frame.max()}, mean={test_frame.mean():.1f}, nz={default_nz:.1f}%"
+                    f"  {backend_name} 默认: {default_w}x{default_h}, "
+                    f"max={default_frame.max()}, mean={default_frame.mean():.1f}, nz={default_nz:.1f}%"
                 )
+                cap.release()
 
-                # 尝试设置目标分辨率
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.resolution[0])
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.resolution[1])
-                cap.set(cv2.CAP_PROP_FPS, self.config.preview_fps)
+                # 把默认分辨率加入候选列表兜底
+                if (default_w, default_h) not in _CANDIDATE_RESOLUTIONS:
+                    _CANDIDATE_RESOLUTIONS.append((default_w, default_h))
 
-                # 预热：丢弃前 10 帧让 AE 稳定（5 帧可能不足）
-                import time as _time
-                for _ in range(10):
-                    cap.read()
-
-                ret2, test_frame2 = cap.read()
-                if ret2 and test_frame2 is not None:
-                    new_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    new_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    new_nz = np.count_nonzero(test_frame2) / test_frame2.size * 100
-                    logger.info(
-                        f"  {backend_name} 设置后帧: {new_w}x{new_h}, "
-                        f"max={test_frame2.max()}, mean={test_frame2.mean():.1f}, nz={new_nz:.1f}%"
-                    )
-
-                    if self._is_near_black(test_frame2):
-                        logger.warning(
-                            f"  {backend_name} 目标分辨率近黑帧(nz={new_nz:.1f}%)，"
-                            f"尝试恢复设置"
-                        )
-                        if self._try_recovery_settings(cap):
-                            # 恢复后重新检查
-                            ret_r, frame_r = cap.read()
-                            if ret_r and frame_r is not None and not self._is_near_black(frame_r):
-                                logger.info(f"  {backend_name} 恢复后帧质量合格")
-                                self._cap = cap
-                                self.is_connected = True
-                                actual_w = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                                actual_h = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                                logger.info(f"摄像头已连接: 后端={backend_name}, 分辨率=({actual_w}, {actual_h})")
-                                return True
-
-                        # 恢复失败，回退默认分辨率
-                        logger.warning(f"  {backend_name} 恢复无效，回退默认分辨率")
-                        cap.set(cv2.CAP_PROP_FRAME_WIDTH, default_w)
-                        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, default_h)
-                        for _ in range(10):
-                            cap.read()
-                        ret3, confirm = cap.read()
-                        if ret3 and confirm is not None:
-                            if self._is_near_black(confirm):
-                                logger.warning(
-                                    f"  {backend_name} 默认分辨率也近黑帧"
-                                    f"(nz={np.count_nonzero(confirm)/confirm.size*100:.1f}%), 跳过"
-                                )
-                                cap.release()
-                                continue
-                        else:
-                            logger.warning(f"  {backend_name} 回退后无法读帧，跳过")
-                            cap.release()
-                            continue
-                else:
-                    logger.warning(f"  {backend_name} 设置分辨率后无法读帧，保留默认分辨率")
-                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, default_w)
-                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, default_h)
-                    for _ in range(10):
-                        cap.read()
-                    ret3, confirm = cap.read()
-                    if not ret3 or confirm is None:
-                        logger.warning(f"  {backend_name} 回退后仍无法读帧，跳过")
-                        cap.release()
+                # 枚举分辨率：从高到低，每个分辨率先用默认 FOURCC，失败再试 MJPG/YUYV
+                # 关键：每次尝试都重新打开 VideoCapture，避免设置 FOURCC 后管线污染
+                for res in _CANDIDATE_RESOLUTIONS:
+                    if res != (default_w, default_h) and res[0] * res[1] < default_w * default_h:
                         continue
 
-                # 成功
-                self._cap = cap
-                self.is_connected = True
-                actual_w = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                actual_h = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                logger.info(f"摄像头已连接: 后端={backend_name}, 分辨率=({actual_w}, {actual_h})")
-                return True
+                    for fourcc_code in [None, "MJPG", "YUYV"]:
+                        cap = cv2.VideoCapture(self.config.index, backend)
+                        if not cap.isOpened():
+                            cap.release()
+                            continue
+
+                        if fourcc_code is not None:
+                            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fourcc_code))
+                        cap.set(cv2.CAP_PROP_FRAME_WIDTH, res[0])
+                        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, res[1])
+
+                        for _ in range(10):
+                            cap.read()
+                        _time.sleep(0.15)
+
+                        ret, frame = cap.read()
+                        if not ret or frame is None:
+                            cap.release()
+                            continue
+
+                        actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        nz = np.count_nonzero(frame) / frame.size * 100
+
+                        label = fourcc_code or "默认"
+                        logger.info(
+                            f"  {backend_name} {label} {res[0]}x{res[1]} "
+                            f"→ 实际 {actual_w}x{actual_h} max={frame.max()} mean={frame.mean():.1f} nz={nz:.1f}%"
+                        )
+
+                        if not self._is_near_black(frame):
+                            self._cap = cap
+                            self.is_connected = True
+                            self._current_resolution = (actual_w, actual_h)
+                            logger.info(f"  {backend_name} {label} {actual_w}x{actual_h} 合格")
+                            logger.info(f"摄像头已连接: 后端={backend_name}, 分辨率=({actual_w}, {actual_h})")
+                            return True
+
+                        cap.release()
 
             logger.error(
                 "所有后端均无法打开摄像头或输出近黑帧。"
@@ -234,8 +190,9 @@ class CameraManager:
                 "3) 尝试 USB 换口或在设备管理器禁用→启用摄像头"
             )
             return False
+
         except Exception as e:
-            logger.error(f"连接摄像头异常: {e}")
+            logger.error(f"连接摄像头异常: {e}", exc_info=True)
             return False
 
     def start_preview(self):
@@ -593,7 +550,7 @@ class CameraManager:
     # ── 释放 ──
 
     def _reconnect_camera(self):
-        """尝试重新连接摄像头（Windows 优先 DSHOW 后端），并验证帧质量"""
+        """尝试重新连接摄像头，复用 connect() 协商的分辨率"""
         try:
             import sys, time as _time
             if self._cap is not None:
@@ -601,14 +558,15 @@ class CameraManager:
             backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
             self._cap = cv2.VideoCapture(self.config.index, backend)
             if self._cap.isOpened():
-                self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.resolution[0])
-                self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.resolution[1])
+                res = getattr(self, "_current_resolution", self.config.resolution)
+                self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, res[0])
+                self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, res[1])
                 # 预热 + 质量检查
                 for _ in range(10):
                     self._cap.read()
                 ret, frame = self._cap.read()
                 if ret and frame is not None and not self._is_near_black(frame):
-                    logger.info("摄像头重新连接成功，帧质量合格")
+                    logger.info(f"摄像头重新连接成功，分辨率={res}")
                 else:
                     nz = np.count_nonzero(frame) / frame.size * 100 if (ret and frame is not None) else 0
                     logger.warning(f"摄像头重新连接成功但帧近黑(nz={nz:.1f}%)")

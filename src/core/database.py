@@ -69,6 +69,40 @@ class Database:
         value TEXT NOT NULL,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- 暑假作业排程进度
+    CREATE TABLE IF NOT EXISTS homework_days (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        day_number INTEGER NOT NULL UNIQUE,
+        total_tasks INTEGER DEFAULT 0,
+        completed_tasks INTEGER DEFAULT 0,
+        is_complete INTEGER DEFAULT 0,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 单个任务完成记录
+    CREATE TABLE IF NOT EXISTS homework_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        day_number INTEGER NOT NULL,
+        task_index INTEGER NOT NULL,
+        subject TEXT NOT NULL,
+        description TEXT NOT NULL,
+        duration_minutes INTEGER DEFAULT 0,
+        is_done INTEGER DEFAULT 0,
+        completed_at TEXT,
+        UNIQUE(day_number, task_index)
+    );
+
+    -- 会话日志（记录每次学习会话）
+    CREATE TABLE IF NOT EXISTS session_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER REFERENCES sessions(id),
+        start_time TEXT NOT NULL,
+        end_time TEXT,
+        tasks_completed INTEGER DEFAULT 0,
+        pomodoros INTEGER DEFAULT 0,
+        total_minutes REAL DEFAULT 0
+    );
     """
 
     def __init__(self, db_path: Path):
@@ -102,7 +136,122 @@ class Database:
         finally:
             conn.close()
 
-    # ── Session 操作 ──
+    # ── Homework 进度操作 ──
+
+    def init_homework_tasks(self, day_data: list):
+        """Initialize homework tasks from schedule data (idempotent)"""
+        from datetime import datetime
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with self._get_conn() as conn:
+            for day in day_data:
+                day_num = day.get("day", 0)
+                tasks = day.get("tasks", [])
+                conn.execute(
+                    """INSERT OR IGNORE INTO homework_days
+                       (day_number, total_tasks, completed_tasks, updated_at)
+                       VALUES (?, ?, 0, ?)""",
+                    (day_num, len(tasks), now),
+                )
+                for idx, task in enumerate(tasks):
+                    conn.execute(
+                        """INSERT OR IGNORE INTO homework_tasks
+                           (day_number, task_index, subject, description, duration_minutes)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (day_num, idx, task.get("subject", ""),
+                         task.get("description", ""), task.get("duration_minutes", 0)),
+                    )
+
+    def toggle_homework_task(self, day_number: int, task_index: int) -> bool:
+        """Toggle task completion status, return new state"""
+        with self._get_conn() as conn:
+            row = conn.execute(
+                "SELECT is_done FROM homework_tasks WHERE day_number=? AND task_index=?",
+                (day_number, task_index),
+            ).fetchone()
+            if not row:
+                return False
+            new_state = 0 if row["is_done"] else 1
+            completed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if new_state else None
+            conn.execute(
+                "UPDATE homework_tasks SET is_done=?, completed_at=? WHERE day_number=? AND task_index=?",
+                (new_state, completed_at, day_number, task_index),
+            )
+            # 更新 homework_days 计数
+            done_count = conn.execute(
+                "SELECT COUNT(*) as cnt FROM homework_tasks WHERE day_number=? AND is_done=1",
+                (day_number,),
+            ).fetchone()["cnt"]
+            total = conn.execute(
+                "SELECT total_tasks FROM homework_days WHERE day_number=?",
+                (day_number,),
+            ).fetchone()
+            if total:
+                conn.execute(
+                    "UPDATE homework_days SET completed_tasks=?, is_complete=?, updated_at=? WHERE day_number=?",
+                    (done_count, 1 if done_count >= total["total_tasks"] else 0,
+                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"), day_number),
+                )
+            return bool(new_state)
+
+    def get_homework_day(self, day_number: int) -> Optional[Dict]:
+        """Get homework progress for a day"""
+        with self._get_conn() as conn:
+            day_row = conn.execute(
+                "SELECT * FROM homework_days WHERE day_number=?", (day_number,)
+            ).fetchone()
+            if not day_row:
+                return None
+            tasks = conn.execute(
+                "SELECT * FROM homework_tasks WHERE day_number=? ORDER BY task_index",
+                (day_number,),
+            ).fetchall()
+            return {
+                "day": day_number,
+                "total_tasks": day_row["total_tasks"],
+                "completed_tasks": day_row["completed_tasks"],
+                "is_complete": bool(day_row["is_complete"]),
+                "tasks": [dict(t) for t in tasks],
+            }
+
+    def get_homework_summary(self) -> Dict:
+        """Get overall homework progress summary"""
+        with self._get_conn() as conn:
+            days = conn.execute("SELECT * FROM homework_days ORDER BY day_number").fetchall()
+            total_tasks = conn.execute(
+                "SELECT COUNT(*) as cnt FROM homework_tasks"
+            ).fetchone()["cnt"]
+            done_tasks = conn.execute(
+                "SELECT COUNT(*) as cnt FROM homework_tasks WHERE is_done=1"
+            ).fetchone()["cnt"]
+            return {
+                "total_days": len(days),
+                "completed_days": sum(1 for d in days if d["is_complete"]),
+                "total_tasks": total_tasks,
+                "done_tasks": done_tasks,
+                "progress_pct": round(done_tasks / total_tasks * 100, 1) if total_tasks else 0,
+            }
+
+    # ── Session Log ──
+
+    def start_session_log(self, session_id: int = 0) -> int:
+        """Start a learning session log, return log_id"""
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with self._get_conn() as conn:
+            cur = conn.execute(
+                "INSERT INTO session_logs (session_id, start_time) VALUES (?, ?)",
+                (session_id, now),
+            )
+            return cur.lastrowid
+
+    def end_session_log(self, log_id: int, tasks_completed: int = 0, pomodoros: int = 0, total_minutes: float = 0):
+        """End a learning session log"""
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with self._get_conn() as conn:
+            conn.execute(
+                """UPDATE session_logs SET end_time=?, tasks_completed=?,
+                   pomodoros=?, total_minutes=? WHERE id=?""",
+                (now, tasks_completed, pomodoros, total_minutes, log_id),
+            )
 
     def create_session(self, raw_video_path: str = "") -> int:
         """创建新会话，返回 session_id"""
