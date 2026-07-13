@@ -1,4 +1,0 @@
-Traceback (most recent call last):
-  File "src/main.py", line 16, in <module>
-    from PyQt6.QtWidgets import QApplication
-ModuleNotFoundError: No module named 'PyQt6'

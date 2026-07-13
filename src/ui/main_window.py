@@ -14,7 +14,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QStackedWidget, QFrame,
-    QMessageBox, QApplication,
+    QMessageBox, QApplication, QScrollArea,
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize, QThread, QObject
 from PyQt6.QtGui import QFont, QIcon, QPixmap, QColor, QPainter, QLinearGradient
@@ -58,11 +58,12 @@ class AnimatedButton(QPushButton):
 class ScoreBadge(QFrame):
     """评分徽章 - 圆形等级展示"""
 
-    def __init__(self, grade: str = "-", score: float = 0.0, parent=None):
+    def __init__(self, grade: str = "-", score: float = 0.0, badge_size: int = 80, parent=None):
         super().__init__(parent)
         self.grade = grade
         self.score = score
-        self.setFixedSize(80, 80)
+        self._badge_size = badge_size
+        self.setFixedSize(badge_size, badge_size)
         self.setStyleSheet(f"""
             QFrame {{
                 background-color: {BG_ELEVATED};
@@ -254,8 +255,15 @@ class MainWindow(QMainWindow):
     def __init__(self, db_path: Path = None):
         super().__init__()
         self.setWindowTitle("StudyBuddy - 智能作业陪伴")
-        self.setMinimumSize(1200, 800)
-        self.resize(1400, 900)
+
+        # 屏幕自适应窗口尺寸
+        screen = QApplication.primaryScreen().availableGeometry()
+        screen_w, screen_h = screen.width(), screen.height()
+        target_w = max(1024, min(int(screen_w * 0.85), screen_w))
+        target_h = max(680, min(int(screen_h * 0.88), screen_h))
+        self.setMinimumSize(900, 600)
+        self.resize(target_w, target_h)
+        self._target_w = target_w
 
         # 设置应用图标
         icon_path = Path(__file__).resolve().parent.parent.parent / "assets" / "images" / "icons" / "app_icon.jpg"
@@ -289,6 +297,9 @@ class MainWindow(QMainWindow):
 
         self._session_start_time = None
         self._session_seconds = 0
+
+        # BGM 路径
+        self._bgm_path = Path(__file__).resolve().parent.parent.parent / "assets" / "audio" / "NIGHT DANCER - imase.mp3"
 
         # 基础运行状态标志（定时器回调依赖，需提前初始化）
         self._is_running = False
@@ -380,7 +391,7 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
 
-        main_layout = QHBoxLayout(central)
+        main_layout = QHBoxLayout()
         main_layout.setSpacing(16)
         main_layout.setContentsMargins(16, 16, 16, 16)
 
@@ -395,6 +406,36 @@ class MainWindow(QMainWindow):
         # ── 右侧：历史记录 ──
         right_panel = self._build_right_panel()
         main_layout.addWidget(right_panel, 2)
+
+        # 动态调整三栏比例
+        self._adjust_stretch_ratio(main_layout)
+
+        # 用 QScrollArea 包裹主内容，确保低分辨率下可滚动
+        content_widget = QWidget()
+        content_widget.setLayout(main_layout)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setWidget(content_widget)
+
+        central_layout = QVBoxLayout(central)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.addWidget(scroll_area)
+
+    def _adjust_stretch_ratio(self, layout):
+        """根据窗口宽度动态调整三栏比例"""
+        w = self._target_w
+        if w >= 1300:
+            layout.setStretch(0, 3)
+            layout.setStretch(1, 2)
+            layout.setStretch(2, 2)
+        else:
+            layout.setStretch(0, 4)
+            layout.setStretch(1, 2)
+            layout.setStretch(2, 2)
 
     def _build_left_panel(self) -> QWidget:
         """构建左侧面板 - 摄像头 + 控制按钮"""
@@ -476,7 +517,8 @@ class MainWindow(QMainWindow):
         score_header.setSpacing(16)
         score_header.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        self.score_badge = ScoreBadge("-", 0)
+        badge_size = max(60, min(80, self._target_w // 16))
+        self.score_badge = ScoreBadge("-", 0, badge_size=badge_size)
         score_header.addWidget(self.score_badge)
 
         score_info = QVBoxLayout()
@@ -637,6 +679,30 @@ class MainWindow(QMainWindow):
             )
             self.status_panel.set_message("摄像头未连接，请检查设备")
 
+    def _start_bgm(self):
+        """开始循环播放背景音乐"""
+        if not self._bgm_path.exists():
+            logger.warning(f"BGM文件不存在: {self._bgm_path}")
+            return
+        try:
+            import pygame
+            pygame.mixer.init()
+            pygame.mixer.music.load(str(self._bgm_path))
+            pygame.mixer.music.play(-1)  # -1 = 无限循环
+            logger.info("BGM 开始播放")
+        except Exception as e:
+            logger.warning(f"BGM播放失败: {e}")
+
+    def _stop_bgm(self):
+        """停止背景音乐"""
+        try:
+            import pygame
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+                logger.info("BGM 已停止")
+        except Exception as e:
+            logger.warning(f"BGM停止失败: {e}")
+
     def _on_start(self):
         """开始作业会话"""
         if not getattr(self, '_core_ready', False):
@@ -694,6 +760,9 @@ class MainWindow(QMainWindow):
         # 通知手机端开始录制
         self._notify_mobile_start()
 
+        # 开始循环播放 BGM
+        self._start_bgm()
+
     def _on_pause(self):
         """暂停/恢复"""
         if not self._is_paused:
@@ -724,6 +793,9 @@ class MainWindow(QMainWindow):
 
         self._is_running = False
         self._is_paused = False
+
+        # 停止 BGM
+        self._stop_bgm()
 
         self.camera.on_frame = None  # 停止检测回调
         self._violation_tracking.clear()  # 清空分级提醒追踪
@@ -1368,6 +1440,15 @@ class MainWindow(QMainWindow):
                 logger.info("收到手机端姿态提醒：头太低了")
         except Exception:
             pass
+
+    def resizeEvent(self, event):
+        """窗口尺寸变化时动态调整内部元素"""
+        super().resizeEvent(event)
+        w = self.width()
+        badge_size = max(50, min(80, w // 16))
+        if hasattr(self, 'score_badge'):
+            self.score_badge.setFixedSize(badge_size, badge_size)
+            self.score_badge._badge_size = badge_size
 
     def closeEvent(self, event):
         """关闭窗口"""

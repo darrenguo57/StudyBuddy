@@ -119,15 +119,21 @@ class VideoClipper:
         resolution = main_clip.size
         logger.info(f"主视频: {duration:.1f}s, {resolution}, 手机端={'是' if has_mobile else '否'}")
 
-        # BGM 自动选择
+        # BGM 自动选择 - 默认使用 NIGHT DANCER
         if not self.config.bgm_path:
-            if isinstance(score_report, dict):
-                grade = score_report.get("grade", "B")
-            else:
-                grade = getattr(score_report, "grade", "B")
-            self.config.bgm_path = self._select_bgm_by_grade(grade)
-            if self.config.bgm_path:
+            default_bgm = Path(__file__).resolve().parent.parent.parent / "assets" / "audio" / "NIGHT DANCER - imase.mp3"
+            if default_bgm.exists():
+                self.config.bgm_path = str(default_bgm)
                 logger.info(f"自动选择 BGM: {self.config.bgm_path}")
+            else:
+                # 回退到按等级选择
+                if isinstance(score_report, dict):
+                    grade = score_report.get("grade", "B")
+                else:
+                    grade = getattr(score_report, "grade", "B")
+                self.config.bgm_path = self._select_bgm_by_grade(grade)
+                if self.config.bgm_path:
+                    logger.info(f"回退 BGM(按等级): {self.config.bgm_path}")
 
         # 1. 划分片段
         self._report("分析违规片段...", 5, progress_callback)
@@ -157,7 +163,7 @@ class VideoClipper:
 
             # 5. 生成封面页（1s）、总结封底（2s）、黑屏关键词（1s）
             self._report("生成封面与封底...", 92, progress_callback)
-            cover_path = self._generate_cover_clip(ffmpeg, resolution, temp_dir)
+            cover_path = self._generate_cover_clip(ffmpeg, resolution, temp_dir, has_mobile)
             end_path = self._generate_end_clip(ffmpeg, resolution, score_report, temp_dir)
             black_path = self._make_keyword_black(ffmpeg, temp_dir, resolution)
             black_path = black_path or self._generate_silent_black(ffmpeg, resolution, temp_dir)
@@ -458,11 +464,11 @@ class VideoClipper:
     # ──────────────────────────────────────────────
 
     def _generate_cover_clip(
-        self, ffmpeg: str, resolution: Tuple[int, int], temp_dir: Path
+        self, ffmpeg: str, resolution: Tuple[int, int], temp_dir: Path, has_mobile: bool = False
     ) -> Path:
         """生成封面页：随机背景图 + 圆润手写风格文字，1 秒"""
         png_path = temp_dir / "cover.png"
-        self._render_cover_image(resolution, png_path)
+        self._render_cover_image(resolution, png_path, has_mobile)
 
         output = temp_dir / "cover.mp4"
         cmd = [
@@ -478,19 +484,16 @@ class VideoClipper:
         logger.info(f"封面页生成: {output}")
         return output
 
-    def _render_cover_image(self, resolution: Tuple[int, int], output_path: Path):
+    def _render_cover_image(self, resolution: Tuple[int, int], output_path: Path, has_mobile: bool = False):
         """用 Pillow 绘制封面图片"""
         from PIL import Image, ImageDraw, ImageFont
 
         w, h = resolution
 
-        # 随机选取背景
+        # 随机选取背景：有手机端用 1/2/3.png，无手机端用 4/5/6.png
         asset_dir = Path(__file__).resolve().parent.parent.parent / "assets" / "images"
-        bg_candidates = [
-            asset_dir / "1.png",
-            asset_dir / "2.png",
-            asset_dir / "3.png",
-        ]
+        bg_numbers = ["1.png", "2.png", "3.png"] if has_mobile else ["4.png", "5.png", "6.png"]
+        bg_candidates = [asset_dir / n for n in bg_numbers]
         bg_path = random.choice([p for p in bg_candidates if p.exists()] or bg_candidates)
         try:
             bg = Image.open(bg_path).convert("RGB").resize((w, h), Image.LANCZOS)
