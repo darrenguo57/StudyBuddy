@@ -3,9 +3,12 @@ StudyBuddy 主窗口 - 重构版
 简洁、现代、高交互性的桌面应用界面
 """
 import logging
+import ssl
 import threading
 import time
 import subprocess
+import json
+import urllib.request
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
@@ -84,8 +87,8 @@ class ScoreBadge(QFrame):
 
     def _grade_color(self) -> str:
         colors = {
-            "S": "#FFD700", "A+": SUCCESS, "A": SUCCESS, "A-": "#66BB6A",
-            "B": PRIMARY_LIGHT, "C": WARNING, "D": ERROR,
+            "A+": SUCCESS, "A-": "#66BB6A", "A": SUCCESS,
+            "B": PRIMARY_LIGHT,
         }
         return colors.get(self.grade, TEXT_TERTIARY)
 
@@ -213,7 +216,7 @@ class ClipWorker(QObject):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, clipper, raw_path: Path, output_path: Path, posture_events: list, score_report: dict, best_frame_path: str = None):
+    def __init__(self, clipper, raw_path: Path, output_path: Path, posture_events: list, score_report: dict, best_frame_path: str = None, mobile_video_path: str = None):
         super().__init__()
         self.clipper = clipper
         self.raw_path = raw_path
@@ -221,6 +224,7 @@ class ClipWorker(QObject):
         self.posture_events = posture_events
         self.score_report = score_report
         self.best_frame_path = best_frame_path
+        self.mobile_video_path = mobile_video_path
 
     def run(self):
         try:
@@ -231,6 +235,7 @@ class ClipWorker(QObject):
                 score_report=self.score_report,
                 best_frame_path=self.best_frame_path,
                 progress_callback=self._on_progress,
+                mobile_video_path=self.mobile_video_path,
             )
             self.finished.emit(str(result))
         except Exception as e:
@@ -686,6 +691,9 @@ class MainWindow(QMainWindow):
         self._refresh_history()
         logger.info(f"Session {self._session_id} started")
 
+        # 通知手机端开始录制
+        self._notify_mobile_start()
+
     def _on_pause(self):
         """暂停/恢复"""
         if not self._is_paused:
@@ -769,15 +777,19 @@ class MainWindow(QMainWindow):
         # 启动后台剪辑线程
         self._last_raw_path = str(raw_path) if raw_path else ""
         self._last_score_report = report
+
+        # 停止手机端录制并获取路径
+        mobile_video_path = self._notify_mobile_stop()
+
         if raw_path and raw_path.exists():
             output_path = raw_path.parent / f"review_{raw_path.stem}.mp4"
-            # 归一化时间戳为会话相对偏移（posture_detector 使用 time.time() 绝对值，video_clipper 需要相对值）
+            # 归一化时间戳为会话相对偏移
             start_ts = self._session_start_time
             clip_events = [
                 {**e, "timestamp": max(0, e.get("timestamp", 0) - start_ts)}
                 for e in events_copy
             ]
-            self._start_clip_worker(raw_path, output_path, clip_events, report, best_frame_path)
+            self._start_clip_worker(raw_path, output_path, clip_events, report, best_frame_path, mobile_video_path)
         else:
             self._on_clip_finished(None, report)
 
@@ -1065,11 +1077,11 @@ class MainWindow(QMainWindow):
             logger.error(f"音视频合并失败: {e}")
             return False
 
-    def _start_clip_worker(self, raw_path: Path, output_path: Path, posture_events: list, score_report: dict, best_frame_path: str = None):
+    def _start_clip_worker(self, raw_path: Path, output_path: Path, posture_events: list, score_report: dict, best_frame_path: str = None, mobile_video_path: str = ""):
         """启动后台视频剪辑线程"""
         self._clip_thread = QThread()
         self._clip_worker = ClipWorker(
-            self.clipper, raw_path, output_path, posture_events, score_report, best_frame_path
+            self.clipper, raw_path, output_path, posture_events, score_report, best_frame_path, mobile_video_path
         )
         self._clip_worker.moveToThread(self._clip_thread)
         self._clip_worker.progress.connect(self._on_clip_progress)
@@ -1238,6 +1250,63 @@ class MainWindow(QMainWindow):
     def _refresh_history(self):
         """刷新历史记录"""
         self.history_panel.refresh()
+
+    # ── 手机端远程录制控制 ──
+
+    def _notify_mobile_start(self):
+        """通知手机端开始录制（HTTPS → WebServer → WebSocket Broadcast）"""
+        try:
+            # 跳过自签证书验证
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+            body = json.dumps({"session_id": self._session_id}).encode("utf-8")
+            req = urllib.request.Request(
+                "https://localhost:8910/api/mobile/start",
+                data=body,
+                method="POST",
+                headers={"Content-Type": "application/json"},
+            )
+            resp = urllib.request.urlopen(req, timeout=5, context=ctx)
+            result = json.loads(resp.read().decode())
+            if result.get("success"):
+                logger.info(f"手机端录制已通知启动: {result.get('path')}")
+            else:
+                logger.warning(f"手机端录制启动失败: {result.get('error')}")
+        except Exception as e:
+            logger.warning(f"通知手机端开始录制失败: {e}")
+
+    def _notify_mobile_stop(self) -> str:
+        """通知手机端停止录制，返回手机端视频路径（可能为空）"""
+        mobile_path = ""
+        try:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+            req = urllib.request.Request(
+                "https://localhost:8910/api/mobile/stop",
+                method="POST",
+                headers={"Content-Type": "application/json"},
+            )
+            resp = urllib.request.urlopen(req, timeout=30, context=ctx)
+            result = json.loads(resp.read().decode())
+            if result.get("success"):
+                mobile_path = result.get("path", "")
+                logger.info(f"手机端录制已停止: {mobile_path}, 帧数={result.get('frame_count')}")
+            else:
+                logger.warning(f"手机端录制停止失败: {result.get('error')}")
+        except Exception as e:
+            logger.warning(f"通知手机端停止录制失败: {e}")
+
+        # 如果路径存在但文件为空/无效，回退
+        if mobile_path and Path(mobile_path).exists():
+            file_size = Path(mobile_path).stat().st_size
+            if file_size < 1024:  # 小于 1KB 视为无效
+                logger.warning(f"手机端视频文件过小({file_size}B)，忽略")
+                mobile_path = ""
+        return mobile_path
 
     def closeEvent(self, event):
         """关闭窗口"""

@@ -25,35 +25,53 @@ body {
   background: var(--bg); color: var(--ink);
   font-size: 15px; line-height: 1.6;
   padding: 12px;
-  padding-bottom: 100px;
+  padding-bottom: 20px;
   -webkit-tap-highlight-color: transparent;
 }
 
 /* Header */
 .header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 0; margin-bottom: 12px;
+  padding: 8px 0; margin-bottom: 8px;
 }
-.header h1 { font-size: 20px; font-weight: 700; }
+.header h1 { font-size: 18px; font-weight: 700; }
 .header .status-dot {
   width: 10px; height: 10px; border-radius: 50%;
   background: var(--accent2); animation: pulse 2s infinite;
 }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
-/* Connection bar */
-.conn-bar {
-  background: var(--surface); border-radius: 12px;
-  padding: 10px 14px; margin-bottom: 12px;
-  border: 1px solid var(--rule);
-  display: flex; align-items: center; gap: 10px;
-  font-size: 13px; color: var(--muted);
+/* Video preview area */
+.video-section {
+  position: relative; border-radius: 14px;
+  overflow: hidden; background: #000;
+  width: 100%; aspect-ratio: 16/9; margin-bottom: 10px;
 }
-.conn-bar .addr { font-family: monospace; color: var(--accent3); font-weight: 600; }
+.video-section video {
+  width: 100%; height: 100%; object-fit: cover;
+  display: block;
+}
+.video-section .rec-badge {
+  position: absolute; top: 8px; right: 8px;
+  background: rgba(255,59,48,0.9); color: #fff;
+  padding: 3px 10px; border-radius: 12px;
+  font-size: 12px; font-weight: 600;
+  display: none; align-items: center; gap: 6px;
+}
+.video-section .rec-badge.show { display: flex; }
+.rec-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #fff; animation: pulse 1s infinite;
+}
+.video-section .idle-text {
+  position: absolute; inset: 0; display: flex;
+  align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.7); font-size: 13px;
+}
 
 /* Tabs */
 .tabs {
-  display: flex; gap: 0; margin-bottom: 12px;
+  display: flex; gap: 0; margin-bottom: 10px;
   background: var(--surface); border-radius: 12px;
   overflow: hidden; border: 1px solid var(--rule);
 }
@@ -68,7 +86,7 @@ body {
 /* Card */
 .card {
   background: var(--surface); border-radius: 14px;
-  padding: 16px; margin-bottom: 12px;
+  padding: 16px; margin-bottom: 10px;
   border: 1px solid var(--rule);
 }
 .card h3 { font-size: 16px; margin-bottom: 10px; }
@@ -80,9 +98,9 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 .day-btn {
-  flex-shrink: 0; width: 38px; height: 38px;
+  flex-shrink: 0; width: 34px; height: 34px;
   border-radius: 50%; border: 2px solid var(--rule);
-  background: var(--surface); font-size: 13px;
+  background: var(--surface); font-size: 12px;
   font-weight: 700; display: flex; align-items: center;
   justify-content: center; cursor: pointer;
   transition: all .15s;
@@ -122,45 +140,6 @@ body {
 .tag-english,.tag-eng { background:#E8F0FF;color:#0A5FBF }
 .tag-pe { background:#E8F5E9;color:#2E7D32 }
 
-/* Camera */
-.camera-area {
-  position: relative; border-radius: 14px;
-  overflow: hidden; background: #000;
-  aspect-ratio: 16/9;
-}
-.camera-area video {
-  width: 100%; height: 100%; object-fit: cover;
-  display: block;
-}
-.camera-area .overlay {
-  position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 8px; background: linear-gradient(transparent, rgba(0,0,0,.6));
-  color: #fff; font-size: 12px;
-  display: flex; align-items: center; gap: 8px;
-}
-.rec-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #FF3B30; animation: pulse 1s infinite;
-}
-
-/* Timer */
-.timer-display {
-  font-size: 36px; font-weight: 700; text-align: center;
-  font-variant-numeric: tabular-nums; padding: 16px 0;
-}
-.timer-controls {
-  display: flex; gap: 10px; justify-content: center;
-}
-.btn {
-  padding: 10px 24px; border-radius: 10px; border: none;
-  font-size: 15px; font-weight: 600; cursor: pointer;
-  transition: all .15s;
-}
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-success { background: var(--accent2); color: #fff; }
-.btn-outline { background: var(--surface); color: var(--ink); border: 1.5px solid var(--rule); }
-.btn:active { transform: scale(.96); opacity: .85; }
-
 /* Progress */
 .progress-bar {
   height: 6px; border-radius: 3px; background: var(--rule);
@@ -170,15 +149,6 @@ body {
   height: 100%; border-radius: 3px; background: var(--accent);
   transition: width .3s;
 }
-
-/* Bottom bar */
-.bottom-bar {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  background: var(--surface); border-top: 1px solid var(--rule);
-  padding: 12px 16px 20px; z-index: 10;
-  display: flex; gap: 10px;
-}
-.bottom-bar .btn { flex: 1; }
 
 /* Summary */
 .summary-grid {
@@ -218,17 +188,18 @@ body {
   <span class="status-dot" id="statusDot" title="已连接"></span>
 </div>
 
-<div class="conn-bar" id="connBar">
-  <span>📱 连接到</span>
-  <span class="addr" id="serverAddr">--</span>
+<!-- 视频预览区域（自动管理） -->
+<div class="video-section" id="videoSection">
+  <video id="cameraVideo" autoplay playsinline muted></video>
+  <div class="idle-text" id="idleText">等待 PC 端开始作业...</div>
+  <div class="rec-badge" id="recBadge">
+    <span class="rec-dot"></span> 录制中
+  </div>
 </div>
 
 <div class="tabs">
-  <div class="tab active" data-page="schedule">📋 作业</div>
-  <div class="tab" data-page="timer">⏱ 计时</div>
-  <div class="tab" data-page="tutor">🤖 辅导</div>
-  <div class="tab" data-page="camera">📷 拍摄</div>
-  <div class="tab" data-page="summary">📊 总结</div>
+  <div class="tab active" data-page="schedule">作业</div>
+  <div class="tab" data-page="summary">总结</div>
 </div>
 
 <!-- 作业排程 -->
@@ -246,61 +217,10 @@ body {
   <p style="font-size:12px;color:var(--muted);text-align:center" id="progressText">0/0 已完成</p>
 </div>
 
-<!-- 番茄钟 -->
-<div class="page" id="page-timer">
-  <div class="card">
-    <div class="timer-display" id="timerDisplay">25:00</div>
-    <div class="timer-controls">
-      <button class="btn btn-outline" onclick="resetTimer()">重置</button>
-      <button class="btn btn-primary" id="timerBtn" onclick="toggleTimer()">开始</button>
-    </div>
-  </div>
-  <div class="card">
-    <h3>当前任务</h3>
-    <p id="currentTaskName" style="color:var(--muted)">选择一个任务开始计时</p>
-  </div>
-  <p style="font-size:12px;color:var(--muted);text-align:center">
-    完成一个番茄钟 = 25分钟专注 + 5分钟休息
-  </p>
-</div>
-
-<!-- AI 辅导 -->
-<div class="page" id="page-tutor">
-  <div class="card">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-      <h3 style="margin:0">AI 学习辅导</h3>
-      <span id="tutorStatus" style="font-size:12px;color:var(--muted);">检测中...</span>
-    </div>
-    <select id="tutorSubject" style="width:100%;padding:10px;border:1px solid var(--rule);border-radius:8px;margin-bottom:10px;font-size:14px;background:var(--surface);">
-      <option value="">通用问题</option>
-      <option value="数学">数学</option>
-      <option value="语文">语文</option>
-      <option value="英语">英语</option>
-    </select>
-    <textarea id="tutorInput" placeholder="输入你的问题，比如：这道应用题怎么做？教我完成这篇阅读理解……" style="width:100%;height:80px;padding:10px;border:1px solid var(--rule);border-radius:8px;font-size:14px;resize:none;background:var(--surface);"></textarea>
-    <button class="btn btn-primary" onclick="askTutor()" style="width:100%;margin-top:8px;">提问</button>
-    <div id="tutorAnswer" style="margin-top:12px;padding:12px;background:var(--warm);border-radius:8px;font-size:14px;line-height:1.8;display:none;white-space:pre-wrap;"></div>
-  </div>
-</div>
-
-<!-- 摄像头 -->
-<div class="page" id="page-camera">
-  <div class="camera-area" id="cameraArea">
-    <video id="cameraVideo" autoplay playsinline muted></video>
-    <div class="overlay" id="recOverlay" style="display:none">
-      <span class="rec-dot"></span>
-      <span id="recTime">00:00</span>
-    </div>
-  </div>
-  <div style="padding:8px 0;text-align:center">
-    <button class="btn btn-outline" id="camBtn" onclick="toggleCamera()">打开摄像头</button>
-  </div>
-</div>
-
 <!-- 总结 -->
 <div class="page" id="page-summary">
   <div class="card">
-    <h3>今日学习总结</h3>
+    <h3>学习总结</h3>
     <div class="summary-grid">
       <div class="summary-item">
         <div class="val" id="sumDuration">0</div>
@@ -311,22 +231,15 @@ body {
         <div class="lbl">已完成</div>
       </div>
       <div class="summary-item">
-        <div class="val" id="sumPomodoros">0</div>
-        <div class="lbl">番茄钟</div>
-      </div>
-      <div class="summary-item">
         <div class="val" id="sumScore">--</div>
         <div class="lbl">评分</div>
       </div>
+      <div class="summary-item">
+        <div class="val" id="sumPomodoros">0</div>
+        <div class="lbl">番茄钟</div>
+      </div>
     </div>
   </div>
-</div>
-
-<!-- 底部操作栏 -->
-<div class="bottom-bar">
-  <button class="btn btn-outline" onclick="prevDay()">前一天</button>
-  <button class="btn btn-success" id="startSessionBtn" onclick="startSession()">开始学习</button>
-  <button class="btn btn-outline" onclick="nextDay()">后一天</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -337,23 +250,24 @@ const STATE = {
   serverUrl: window.location.origin,
   scheduleData: [],
   currentDay: 0,
-  taskProgress: {},   // { `${day}-${taskIdx}`: true }
-  timerSeconds: 25 * 60,
-  timerRunning: false,
-  timerInterval: null,
+  taskProgress: {},
   cameraStream: null,
+  isRecording: false,
+  frameInterval: null,
+  canvas: null,
+  canvasCtx: null,
   ws: null,
   connected: false,
+  streamFPS: 15,
+  audioRecorder: null,       // MediaRecorder for audio
+  audioChunks: [],           // collected audio blobs
 };
 
 // ========== 初始化 ==========
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('serverAddr').textContent = STATE.serverUrl;
   setupTabs();
   connectWS();
   fetchSchedule();
-  checkTutorStatus();
-  updateTimerDisplay();
 });
 
 // Tabs
@@ -372,6 +286,7 @@ function setupTabs() {
 function connectWS() {
   const wsUrl = STATE.serverUrl.replace('http', 'ws') + '/ws/mobile';
   STATE.ws = new WebSocket(wsUrl);
+  STATE.ws.binaryType = 'arraybuffer';
   STATE.ws.onopen = () => {
     STATE.connected = true;
     document.getElementById('statusDot').style.background = 'var(--accent2)';
@@ -379,14 +294,175 @@ function connectWS() {
   STATE.ws.onclose = () => {
     STATE.connected = false;
     document.getElementById('statusDot').style.background = '#FF3B30';
+    if (STATE.isRecording) stopMobileRecording();
     setTimeout(connectWS, 3000);
   };
-  STATE.ws.onmessage = (e) => {
+  STATE.ws.onmessage = async (e) => {
     try {
       const msg = JSON.parse(e.data);
-      if (msg.type === 'pong') { /* keepalive */ }
+      handleWSMessage(msg);
     } catch(e) {}
   };
+}
+
+function sendWS(data) {
+  if (STATE.ws && STATE.ws.readyState === WebSocket.OPEN) {
+    STATE.ws.send(JSON.stringify(data));
+  }
+}
+
+async function handleWSMessage(msg) {
+  switch (msg.type) {
+    case 'pong':
+      break;
+    case 'start_mobile_recording':
+      startMobileRecording();
+      break;
+    case 'stop_mobile_recording':
+      await stopMobileRecording();
+      break;
+  }
+}
+
+// ========== 手机端自动录制 ==========
+async function startMobileRecording() {
+  if (STATE.isRecording) return;
+
+  // 创建离屏 canvas 用于帧捕获
+  STATE.canvas = document.createElement('canvas');
+  STATE.canvasCtx = STATE.canvas.getContext('2d');
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        zoom: { ideal: 1.0 },
+        advanced: [
+          { zoom: 1.0 }
+        ]
+      },
+      audio: true
+    });
+    STATE.cameraStream = stream;
+    const video = document.getElementById('cameraVideo');
+    video.srcObject = stream;
+    // 视频预览静音（避免回声），但音频轨道本身保留用于录制
+    video.muted = true;
+
+    STATE.isRecording = true;
+    document.getElementById('idleText').style.display = 'none';
+    document.getElementById('recBadge').classList.add('show');
+
+    // 启动音频录制（MediaRecorder，仅音频轨道）
+    STATE.audioChunks = [];
+    try {
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length > 0) {
+        const audioStream = new MediaStream(audioTracks);
+        STATE.audioRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm;codecs=opus' });
+        STATE.audioRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            STATE.audioChunks.push(e.data);
+          }
+        };
+        STATE.audioRecorder.start(1000);  // 每秒输出一个 chunk
+        console.log('手机端音频录制已启动');
+      } else {
+        console.warn('无音频轨道可用');
+      }
+    } catch (e) {
+      console.warn('音频录制启动失败:', e);
+    }
+
+    // 等待视频元数据就绪再开始捕获
+    await new Promise((resolve) => {
+      video.onloadedmetadata = resolve;
+      if (video.readyState >= 2) resolve();
+    });
+
+    // 设置 canvas 尺寸
+    STATE.canvas.width = video.videoWidth || 720;
+    STATE.canvas.height = video.videoHeight || 1280;
+
+    // 定时发送帧
+    const interval = Math.round(1000 / STATE.streamFPS);
+    STATE.frameInterval = setInterval(() => {
+      captureAndSendFrame();
+    }, interval);
+
+    console.log('手机端录制已启动');
+  } catch(e) {
+    console.error('手机端摄像头启动失败:', e);
+    showToast('摄像头不可用: ' + e.message);
+    STATE.isRecording = false;
+  }
+}
+
+async function stopMobileRecording() {
+  STATE.isRecording = false;
+
+  // 停止音频录制并上传
+  if (STATE.audioRecorder && STATE.audioRecorder.state !== 'inactive') {
+    STATE.audioRecorder.onstop = async () => {
+      if (STATE.audioChunks.length > 0) {
+        const audioBlob = new Blob(STATE.audioChunks, { type: 'audio/webm' });
+        try {
+          const formData = new FormData();
+          formData.append('audio', audioBlob, 'mobile_audio.webm');
+          await fetch('/api/mobile/audio', { method: 'POST', body: formData });
+          console.log('手机端音频已上传');
+        } catch (e) {
+          console.warn('音频上传失败:', e);
+        }
+      }
+      STATE.audioChunks = [];
+    };
+    STATE.audioRecorder.stop();
+    STATE.audioRecorder = null;
+  }
+
+  if (STATE.frameInterval) {
+    clearInterval(STATE.frameInterval);
+    STATE.frameInterval = null;
+  }
+
+  if (STATE.cameraStream) {
+    STATE.cameraStream.getTracks().forEach(t => t.stop());
+    STATE.cameraStream = null;
+  }
+
+  document.getElementById('cameraVideo').srcObject = null;
+  document.getElementById('idleText').style.display = 'flex';
+  document.getElementById('recBadge').classList.remove('show');
+
+  STATE.canvas = null;
+  STATE.canvasCtx = null;
+
+  console.log('手机端录制已停止');
+}
+
+function captureAndSendFrame() {
+  if (!STATE.isRecording || !STATE.canvas || !STATE.canvasCtx) return;
+  if (!STATE.ws || STATE.ws.readyState !== WebSocket.OPEN) return;
+
+  const video = document.getElementById('cameraVideo');
+  if (video.readyState < 2) return;
+
+  try {
+    STATE.canvasCtx.drawImage(video, 0, 0, STATE.canvas.width, STATE.canvas.height);
+    STATE.canvas.toBlob((blob) => {
+      if (!blob) return;
+      blob.arrayBuffer().then(buf => {
+        if (STATE.ws && STATE.ws.readyState === WebSocket.OPEN) {
+          STATE.ws.send(buf);
+        }
+      }).catch(() => {});
+    }, 'image/jpeg', 0.6);
+  } catch(e) {
+    // 静默忽略捕获错误
+  }
 }
 
 // ========== 排程加载 ==========
@@ -395,9 +471,7 @@ async function fetchSchedule() {
     const res = await fetch('/api/schedule');
     const data = await res.json();
     STATE.scheduleData = data.plans || [];
-    // 加载服务器端进度
     await loadServerProgress();
-    // 默认显示第1天
     STATE.currentDay = 0;
     renderDaySelector();
     selectDay(0);
@@ -408,7 +482,6 @@ async function fetchSchedule() {
   }
 }
 
-// ========== 从服务器加载进度 ==========
 async function loadServerProgress() {
   try {
     STATE.taskProgress = {};
@@ -422,54 +495,11 @@ async function loadServerProgress() {
             if (t.is_done) STATE.taskProgress[`${i}-${ti}`] = true;
           });
         }
-      } catch(e) { /* 某天未初始化，跳过 */ }
+      } catch(e) {}
     }
     renderDaySelector();
     renderTasks();
-  } catch(e) {
-    // 回退 localStorage
-    loadProgress();
-  }
-}
-
-// ========== AI 辅导 ==========
-async function checkTutorStatus() {
-  try {
-    const res = await fetch('/api/tutor/status');
-    const d = await res.json();
-    document.getElementById('tutorStatus').textContent =
-      d.available ? '🟢 已就绪' : '⚪ 未连接（需要启动 Ollama）';
-    document.getElementById('tutorStatus').style.color =
-      d.available ? 'var(--accent2)' : 'var(--muted)';
-  } catch(e) {
-    document.getElementById('tutorStatus').textContent = '检测失败';
-  }
-}
-
-async function askTutor() {
-  const input = document.getElementById('tutorInput').value.trim();
-  if (!input) return;
-  const answerDiv = document.getElementById('tutorAnswer');
-  answerDiv.style.display = 'block';
-  answerDiv.textContent = '正在思考...';
-  try {
-    const res = await fetch('/api/tutor', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        question: input,
-        subject: document.getElementById('tutorSubject').value
-      })
-    });
-    const d = await res.json();
-    if (d.success) {
-      answerDiv.textContent = d.answer;
-    } else {
-      answerDiv.textContent = '出错了：' + (d.error || '未知错误');
-    }
-  } catch(e) {
-    answerDiv.textContent = '请求失败，请检查网络连接';
-  }
+  } catch(e) {}
 }
 
 // ========== 日期选择器 ==========
@@ -496,9 +526,6 @@ function selectDay(idx) {
   renderTasks();
 }
 
-function prevDay() { if (STATE.currentDay > 0) selectDay(STATE.currentDay - 1); }
-function nextDay() { if (STATE.currentDay < STATE.scheduleData.length - 1) selectDay(STATE.currentDay + 1); }
-
 // ========== 任务列表 ==========
 function renderTasks() {
   const plan = STATE.scheduleData[STATE.currentDay];
@@ -520,7 +547,7 @@ function renderTasks() {
     const done = STATE.taskProgress[`${STATE.currentDay}-${i}`];
     return `
       <div class="task-item" onclick="toggleTask(${i})">
-        <div class="task-check ${done ? 'done' : ''}">${done ? '✓' : ''}</div>
+        <div class="task-check ${done ? 'done' : ''}">${done ? '&#10003;' : ''}</div>
         <div class="task-body">
           <div class="task-name">${t.description}</div>
           <div class="task-meta">
@@ -547,7 +574,6 @@ function toggleTask(idx) {
   renderTasks();
   renderDaySelector();
   updateSummary();
-  // 同步到服务器
   fetch('/api/homework/toggle', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -571,104 +597,6 @@ function saveProgress() {
   try {
     localStorage.setItem('sb_progress', JSON.stringify(STATE.taskProgress));
   } catch(e) {}
-}
-function loadProgress() {
-  try {
-    const raw = localStorage.getItem('sb_progress');
-    if (raw) STATE.taskProgress = JSON.parse(raw);
-  } catch(e) {}
-}
-
-// ========== 番茄钟 ==========
-function toggleTimer() {
-  if (STATE.timerRunning) {
-    pauseTimer();
-  } else {
-    startTimer();
-  }
-}
-
-function startTimer() {
-  STATE.timerRunning = true;
-  document.getElementById('timerBtn').textContent = '暂停';
-  STATE.timerInterval = setInterval(() => {
-    STATE.timerSeconds--;
-    updateTimerDisplay();
-    if (STATE.timerSeconds <= 0) {
-      timerDone();
-    }
-  }, 1000);
-}
-
-function pauseTimer() {
-  STATE.timerRunning = false;
-  document.getElementById('timerBtn').textContent = '继续';
-  clearInterval(STATE.timerInterval);
-}
-
-function resetTimer() {
-  pauseTimer();
-  STATE.timerSeconds = 25 * 60;
-  updateTimerDisplay();
-  document.getElementById('timerBtn').textContent = '开始';
-}
-
-function updateTimerDisplay() {
-  const m = Math.floor(STATE.timerSeconds / 60);
-  const s = STATE.timerSeconds % 60;
-  document.getElementById('timerDisplay').textContent =
-    `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-}
-
-function timerDone() {
-  clearInterval(STATE.timerInterval);
-  STATE.timerRunning = false;
-  STATE.timerSeconds = 5 * 60; // 休息5分钟
-  updateTimerDisplay();
-  document.getElementById('timerBtn').textContent = '休息';
-  showToast('🍅 番茄钟完成！休息5分钟吧~');
-}
-
-// ========== 摄像头 ==========
-function toggleCamera() {
-  if (STATE.cameraStream) {
-    stopCamera();
-  } else {
-    startCamera();
-  }
-}
-
-async function startCamera() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    STATE.cameraStream = stream;
-    const video = document.getElementById('cameraVideo');
-    video.srcObject = stream;
-    document.getElementById('camBtn').textContent = '关闭摄像头';
-    document.getElementById('camBtn').classList.add('btn-primary');
-    document.getElementById('camBtn').classList.remove('btn-outline');
-  } catch(e) {
-    showToast('无法访问摄像头: ' + e.message);
-  }
-}
-
-function stopCamera() {
-  if (STATE.cameraStream) {
-    STATE.cameraStream.getTracks().forEach(t => t.stop());
-    STATE.cameraStream = null;
-  }
-  document.getElementById('cameraVideo').srcObject = null;
-  document.getElementById('camBtn').textContent = '打开摄像头';
-  document.getElementById('camBtn').classList.remove('btn-primary');
-  document.getElementById('camBtn').classList.add('btn-outline');
-}
-
-// ========== 开始/结束学习 ==========
-function startSession() {
-  showToast('学习会话已开始！坐姿和专注度监控已启用');
-  if (!STATE.cameraStream) startCamera();
 }
 
 // ========== Toast ==========
@@ -695,9 +623,7 @@ async function updateSummary() {
 
 // 定期 ping
 setInterval(() => {
-  if (STATE.ws && STATE.ws.readyState === WebSocket.OPEN) {
-    STATE.ws.send(JSON.stringify({ type: 'ping' }));
-  }
+  sendWS({ type: 'ping' });
 }, 30000);
 </script>
 </body>

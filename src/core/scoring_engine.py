@@ -48,12 +48,12 @@ class ScoringEngine:
         "correction": 0.15,
     }
 
-    # 等级阈值 — A+ / A- / B / C 四档（大部分落在 B）
+    # 等级阈值 — A+ / A- / A / B 四档（得分 79-99 区间）
     GRADE_THRESHOLDS = [
-        (90, "A+", "超级优秀"),
-        (75, "A-", "非常棒"),
-        (55, "B", "表现良好"),
-        (0, "C", "还需要改进"),
+        (95, "A+", "超级优秀"),
+        (90, "A-", "非常棒"),
+        (85, "A", "表现良好"),
+        (79, "B", "还需要改进"),
     ]
 
     # 扣分规则（大幅降低，让大部分结果落在 B 范围）
@@ -162,7 +162,9 @@ class ScoringEngine:
         )
 
         # ── 等级评定 ──
-        report.total_score = max(0, min(100, report.total_score))
+        # 将原始 0-100 得分映射到 79-99 区间
+        raw_score = max(0, min(100, report.total_score))
+        report.total_score = 79.0 + raw_score * 0.20
         report.grade = self._get_grade(report.total_score)
 
         logger.info(
@@ -365,7 +367,7 @@ class ScoringEngine:
         for threshold, grade, _ in self.GRADE_THRESHOLDS:
             if score >= threshold:
                 return grade
-        return "C"
+        return "B"
 
     def generate_text_report(self, report: ScoreReport) -> str:
         """生成可读评分报告"""

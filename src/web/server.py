@@ -7,10 +7,13 @@ import json
 import logging
 import time
 import threading
+import queue
 from pathlib import Path
 from typing import Optional, Dict
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import cv2
+import numpy as np
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,6 +59,19 @@ class WebServer:
         self.schedule_data: list = []
         self.mobile_ws_clients: set = set()
         self._schedule_loaded = False
+
+        # 手机端录制器
+        self._mobile_recording = False
+        self._mobile_recording_path: Optional[Path] = None
+        self._mobile_audio_path: Optional[Path] = None
+        self._mobile_frame_queue: Optional[queue.Queue] = None
+        self._mobile_writer_thread: Optional[threading.Thread] = None
+        self._mobile_writer_stop: Optional[threading.Event] = None
+        self._mobile_frame_width: int = 640
+        self._mobile_frame_height: int = 480
+        self._mobile_frame_count: int = 0
+        self._mobile_lock = threading.Lock()
+        self._first_frame_received = False
 
         # 视频帧接收回调（由 CameraManager 处理）
         self.on_mobile_frame = None
@@ -141,7 +157,7 @@ class WebServer:
         @app.get("/api/tutor/status")
         async def tutor_status():
             """检查 AI 辅导服务状态"""
-            from ..core.ai_tutor_local import get_tutor_status
+            from core.ai_tutor_local import get_tutor_status
             status = get_tutor_status()
             return JSONResponse({
                 "available": (
@@ -180,6 +196,147 @@ class WebServer:
             data = self.db.get_homework_summary()
             return JSONResponse({"success": True, "data": data})
 
+        # ── 手机端远程录制控制 ──
+
+        @app.post("/api/mobile/start")
+        async def start_mobile_recording(request: Request = None):
+            """PC 端通知：开始手机端录制"""
+            if self._mobile_recording:
+                return JSONResponse({"success": False, "error": "手机端已在录制中"})
+
+            # 尝试从请求体解析 session_id
+            session_id = ""
+            if request is not None:
+                try:
+                    body = await request.json()
+                    session_id = body.get("session_id", "")
+                except Exception:
+                    pass
+
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            recordings_dir = PROJECT_ROOT / "recordings"
+            recordings_dir.mkdir(parents=True, exist_ok=True)
+
+            if session_id:
+                self._mobile_recording_path = recordings_dir / f"mobile_session_{session_id}_{timestamp}.mp4"
+                # 同时记录音频文件路径
+                self._mobile_audio_path = recordings_dir / f"mobile_session_{session_id}_{timestamp}.wav"
+            else:
+                self._mobile_recording_path = recordings_dir / f"mobile_{timestamp}.mp4"
+                self._mobile_audio_path = recordings_dir / f"mobile_{timestamp}.wav"
+
+            # 初始化录制队列和写线程
+            self._mobile_frame_queue = queue.Queue(maxsize=120)
+            self._mobile_writer_stop = threading.Event()
+            self._mobile_frame_count = 0
+            self._first_frame_received = False
+            self._mobile_recording = True
+
+            self._mobile_writer_thread = threading.Thread(
+                target=self._mobile_writer_loop,
+                daemon=True,
+                name="mobile-writer",
+            )
+            self._mobile_writer_thread.start()
+
+            # 广播给所有手机端：开始录制
+            await self.broadcast({"type": "start_mobile_recording"})
+
+            logger.info(f"手机端录制已启动: {self._mobile_recording_path}")
+            return JSONResponse({
+                "success": True,
+                "path": str(self._mobile_recording_path),
+            })
+
+        @app.post("/api/mobile/stop")
+        async def stop_mobile_recording():
+            """PC 端通知：停止手机端录制"""
+            if not self._mobile_recording:
+                return JSONResponse({"success": False, "error": "手机端当前未在录制"})
+
+            self._mobile_recording = False
+
+            # 通知写线程停止
+            if self._mobile_writer_stop:
+                self._mobile_writer_stop.set()
+
+            # 等待写线程完成
+            if self._mobile_writer_thread and self._mobile_writer_thread.is_alive():
+                self._mobile_writer_thread.join(timeout=15.0)
+
+            # 广播给所有手机端：停止录制
+            await self.broadcast({"type": "stop_mobile_recording"})
+
+            # 短暂等待音频上传（手机端收到 stop 广播后会异步上传）
+            await asyncio.sleep(2.0)
+
+            # 如果有音频文件且存在，合并到视频中
+            final_path = str(self._mobile_recording_path) if self._mobile_recording_path else ""
+            audio_path = str(self._mobile_audio_path) if self._mobile_audio_path else ""
+
+            if final_path and audio_path and Path(audio_path).exists() and Path(final_path).exists():
+                merged = self._merge_mobile_audio_to_video(final_path, audio_path)
+                if merged:
+                    final_path = merged
+
+            frame_count = self._mobile_frame_count
+            self._mobile_writer_thread = None
+            self._mobile_writer_stop = None
+            self._mobile_frame_queue = None
+
+            logger.info(f"手机端录制已停止: {final_path}, 共 {frame_count} 帧")
+            return JSONResponse({
+                "success": True,
+                "path": final_path,
+                "frame_count": frame_count,
+            })
+
+        @app.get("/api/mobile/status")
+        async def get_mobile_status():
+            """查询手机端录制状态"""
+            return JSONResponse({
+                "recording": self._mobile_recording,
+                "path": str(self._mobile_recording_path) if self._mobile_recording_path else "",
+                "frame_count": self._mobile_frame_count,
+                "first_frame_received": self._first_frame_received,
+            })
+
+        @app.get("/api/mobile/path")
+        async def get_mobile_video_path():
+            """获取最近一次手机端录制的视频路径"""
+            return JSONResponse({
+                "path": str(self._mobile_recording_path) if self._mobile_recording_path else "",
+            })
+
+        @app.post("/api/mobile/audio")
+        async def upload_mobile_audio(audio: UploadFile = File(...)):
+            """手机端上传录制的音频文件（WebM/Opus → WAV）"""
+            if not self._mobile_audio_path:
+                return JSONResponse({"success": False, "error": "无对应的音频存储路径"})
+
+            try:
+                # 保存上传的 WebM 音频
+                webm_path = self._mobile_audio_path.with_suffix(".webm")
+                content = await audio.read()
+                with open(webm_path, "wb") as f:
+                    f.write(content)
+                logger.info(f"手机端音频已保存: {webm_path} ({len(content)} bytes)")
+
+                # 使用 ffmpeg 转码为 WAV
+                self._convert_webm_to_wav(str(webm_path), str(self._mobile_audio_path))
+                logger.info(f"手机端音频已转码为 WAV: {self._mobile_audio_path}")
+
+                # 清理 webm
+                try:
+                    webm_path.unlink()
+                except Exception:
+                    pass
+
+                return JSONResponse({"success": True, "path": str(self._mobile_audio_path)})
+            except Exception as e:
+                logger.error(f"手机端音频处理失败: {e}")
+                return JSONResponse({"success": False, "error": str(e)})
+
         # ── WebSocket ──
 
         @app.websocket("/ws/mobile")
@@ -214,18 +371,18 @@ class WebServer:
                                 logger.info(f"任务更新: {msg}")
 
                             elif msg_type == "camera_frame":
-                                # 视频帧数据（base64）
-                                if self.on_mobile_frame:
-                                    frame_data = msg.get("data", "")
-                                    self.on_mobile_frame(frame_data)
+                                # 手机端视频帧（base64 JPEG）
+                                frame_data = msg.get("data", "")
+                                if frame_data and self._mobile_recording:
+                                    self._handle_mobile_frame_b64(frame_data)
 
                         except json.JSONDecodeError:
                             pass
 
                     elif "bytes" in data:
-                        # 二进制视频帧
-                        if self.on_mobile_frame:
-                            self.on_mobile_frame(data["bytes"])
+                        # 二进制视频帧（JPEG 字节流）
+                        if self._mobile_recording:
+                            self._handle_mobile_frame_bytes(data["bytes"])
 
             except WebSocketDisconnect:
                 logger.info("手机端断开连接")
@@ -265,17 +422,32 @@ class WebServer:
         import uvicorn
 
         def run_server():
+            # HTTPS 证书路径
+            cert_dir = PROJECT_ROOT / "certs"
+            ssl_certfile = str(cert_dir / "cert.pem")
+            ssl_keyfile = str(cert_dir / "key.pem")
+
+            ssl_kwargs = {}
+            if cert_dir.exists() and (cert_dir / "cert.pem").exists():
+                ssl_kwargs = {
+                    "ssl_certfile": ssl_certfile,
+                    "ssl_keyfile": ssl_keyfile,
+                }
+
             uvicorn.run(
                 self.app,
                 host=self.host,
                 port=self.port,
                 log_level="warning",
                 access_log=False,
+                **ssl_kwargs,
             )
 
         thread = threading.Thread(target=run_server, daemon=True, name="web-server")
         thread.start()
-        logger.info(f"Web 服务器已启动: http://{self.host}:{self.port}")
+
+        protocol = "https" if (PROJECT_ROOT / "certs" / "cert.pem").exists() else "http"
+        logger.info(f"Web 服务器已启动: {protocol}://{self.host}:{self.port}")
 
     async def broadcast(self, message: dict):
         """向所有手机端推送消息"""
@@ -286,3 +458,169 @@ class WebServer:
             except Exception:
                 dead.add(ws)
         self.mobile_ws_clients -= dead
+
+    # ── 手机端视频帧录制（后台线程） ──
+
+    def _handle_mobile_frame_b64(self, b64_data: str):
+        """处理 base64 JPEG 帧 → 入队"""
+        try:
+            import base64
+            # 移除可能的 data:image/jpeg;base64, 前缀
+            if "," in b64_data:
+                b64_data = b64_data.split(",", 1)[1]
+            raw = base64.b64decode(b64_data)
+            self._enqueue_mobile_frame(raw)
+        except Exception as e:
+            logger.debug(f"base64 帧解码失败: {e}")
+
+    def _handle_mobile_frame_bytes(self, raw_bytes: bytes):
+        """处理二进制 JPEG 帧 → 入队"""
+        self._enqueue_mobile_frame(raw_bytes)
+
+    def _enqueue_mobile_frame(self, jpeg_bytes: bytes):
+        """将 JPEG 字节推入录制队列"""
+        with self._mobile_lock:
+            if not self._mobile_recording or self._mobile_frame_queue is None:
+                return
+
+            # 非阻塞入队，队列满则丢弃最旧帧
+            if self._mobile_frame_queue.full():
+                try:
+                    self._mobile_frame_queue.get_nowait()
+                except queue.Empty:
+                    pass
+            try:
+                self._mobile_frame_queue.put_nowait(jpeg_bytes)
+            except queue.Full:
+                pass
+
+    def _mobile_writer_loop(self):
+        """后台写线程：从队列取 JPEG 帧 → 解码 → 写入 MP4"""
+        writer = None
+        path = None
+        try:
+            # 等待第一帧以确定分辨率
+            import time as _time
+            first_jpeg = None
+            deadline = _time.time() + 15.0
+            while first_jpeg is None and _time.time() < deadline:
+                try:
+                    first_jpeg = self._mobile_frame_queue.get(timeout=1.0)
+                except queue.Empty:
+                    if self._mobile_writer_stop and self._mobile_writer_stop.is_set():
+                        logger.warning("手机端录制写线程：未收到任何帧即停止")
+                        return
+
+            if first_jpeg is None:
+                logger.error("手机端录制写线程：15秒内未收到任何帧，录制失败")
+                return
+
+            # 解码第一帧获取分辨率
+            frame = cv2.imdecode(np.frombuffer(first_jpeg, np.uint8), cv2.IMREAD_COLOR)
+            if frame is None:
+                logger.error("手机端录制：无法解码第一帧")
+                return
+
+            h, w = frame.shape[:2]
+            self._mobile_frame_width = w
+            self._mobile_frame_height = h
+
+            path = str(self._mobile_recording_path)
+            # 使用 mp4v 编码，不依赖 OpenH264
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            writer = cv2.VideoWriter(path, fourcc, 15.0, (w, h))
+            if not writer.isOpened():
+                logger.error(f"手机端录制：无法打开 VideoWriter: {path}")
+                return
+
+            self._first_frame_received = True
+            writer.write(frame)
+            self._mobile_frame_count = 1
+            logger.info(f"手机端录制写线程已启动: {path} ({w}x{h})")
+
+            # 持续写入后续帧
+            while not (self._mobile_writer_stop and self._mobile_writer_stop.is_set()):
+                try:
+                    jpeg_bytes = self._mobile_frame_queue.get(timeout=1.0)
+                    frame = cv2.imdecode(np.frombuffer(jpeg_bytes, np.uint8), cv2.IMREAD_COLOR)
+                    if frame is not None:
+                        fh, fw = frame.shape[:2]
+                        if fw != w or fh != h:
+                            frame = cv2.resize(frame, (w, h))
+                        writer.write(frame)
+                        self._mobile_frame_count += 1
+                except queue.Empty:
+                    continue
+                except Exception as e:
+                    logger.error(f"手机端录制写帧失败: {e}")
+
+        except Exception as e:
+            logger.error(f"手机端录制写线程异常: {e}")
+        finally:
+            if writer is not None:
+                try:
+                    writer.release()
+                except Exception:
+                    pass
+            # 排空队列中剩余帧
+            remaining = 0
+            while self._mobile_frame_queue and not self._mobile_frame_queue.empty():
+                try:
+                    self._mobile_frame_queue.get_nowait()
+                    remaining += 1
+                except queue.Empty:
+                    break
+            logger.info(
+                f"手机端录制写线程结束: {path}, "
+                f"写入 {self._mobile_frame_count} 帧, "
+                f"丢弃 {remaining} 帧"
+            )
+
+    def _convert_webm_to_wav(self, webm_path: str, wav_path: str):
+        """使用 ffmpeg 将 WebM 音频转码为 WAV"""
+        import subprocess
+        import imageio_ffmpeg
+
+        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        cmd = [
+            ffmpeg, "-y",
+            "-i", webm_path,
+            "-vn",           # 只取音频
+            "-acodec", "pcm_s16le",
+            "-ar", "44100",
+            "-ac", "1",      # 单声道
+            wav_path,
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if proc.returncode != 0:
+            logger.error(f"WebM→WAV 转码失败: {proc.stderr[-300:]}")
+            raise RuntimeError(f"ffmpeg 转码失败")
+        logger.info(f"WebM→WAV 转码完成: {wav_path}")
+
+    def _merge_mobile_audio_to_video(self, video_path: str, audio_path: str) -> Optional[str]:
+        """使用 ffmpeg 将手机端音频合并到视频中，返回合并后的视频路径"""
+        import subprocess
+        import imageio_ffmpeg
+
+        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        output_path = str(Path(video_path).with_stem(Path(video_path).stem + "_audio"))
+
+        cmd = [
+            ffmpeg, "-y",
+            "-i", video_path,
+            "-i", audio_path,
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-map", "0:v:0",
+            "-map", "1:a:0",
+            "-shortest",
+            output_path,
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if proc.returncode != 0:
+            logger.warning(f"手机端音视频合并失败: {proc.stderr[-300:]}")
+            return None
+
+        logger.info(f"手机端音视频合并完成: {output_path}")
+        return output_path
