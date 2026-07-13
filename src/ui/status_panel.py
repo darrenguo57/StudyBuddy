@@ -189,6 +189,17 @@ class StatusPanel(QWidget):
         else:
             self.message_label.setText(info)
 
+    def set_compliance_info(self, info: str):
+        """设置合规度/相似度信息（追加到消息下方）"""
+        current = self.message_label.text()
+        # 如果当前消息包含相似度信息，替换它；否则追加
+        if "\n" in current and "相似度" in current.split("\n")[-1]:
+            current = current.rsplit("\n", 1)[0]
+        if current.strip():
+            self.message_label.setText(current + "\n" + info)
+        else:
+            self.message_label.setText(info)
+
     def show_clip_progress(self, progress: int = 0):
         """显示剪辑进度条"""
         self.clip_progress.setValue(progress)

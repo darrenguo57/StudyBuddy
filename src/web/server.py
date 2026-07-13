@@ -411,6 +411,8 @@ class WebServer:
                                 frame_data = msg.get("data", "")
                                 if frame_data and self._mobile_recording:
                                     self._handle_mobile_frame_b64(frame_data)
+                                elif frame_data and not self._mobile_recording:
+                                    logger.debug("收到 camera_frame 但当前未处于录制状态，已忽略")
 
                         except json.JSONDecodeError:
                             pass
@@ -419,6 +421,8 @@ class WebServer:
                         # 二进制视频帧（JPEG 字节流）
                         if self._mobile_recording:
                             self._handle_mobile_frame_bytes(data["bytes"])
+                        else:
+                            logger.debug(f"收到 {len(data['bytes'])} bytes 二进制帧但当前未录制，已忽略")
 
             except WebSocketDisconnect:
                 logger.info("手机端断开连接")
@@ -602,6 +606,11 @@ class WebServer:
         with self._mobile_lock:
             if not self._mobile_recording or self._mobile_frame_queue is None:
                 return
+
+            # 首帧到达日志（诊断手机端 0 帧问题）
+            if not self._first_frame_received:
+                self._first_frame_received = True
+                logger.info(f"手机端首帧已接收: {len(jpeg_bytes)} bytes")
 
             # 非阻塞入队，队列满则丢弃最旧帧
             if self._mobile_frame_queue.full():

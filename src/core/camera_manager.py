@@ -1,9 +1,10 @@
 """
-摄像头管理模块 - 使用 VidGear WriteGear 替代 OpenCV VideoWriter
+摄像头管理模块 - FFmpeg 子进程管道写入 H.264 MP4
 修复: 视频录制黑屏问题（codec 兼容 + 帧深拷贝）
-新增: 麦克风同步录音（pyaudio → WAV → FFmpeg 合并 MP4）
+新增: 麦克风同步录音（pyaudio → WAV）
 """
 import logging
+import subprocess
 import time
 import threading
 import queue
@@ -297,8 +298,8 @@ class CameraManager:
             raise RuntimeError(f"无法获取摄像头分辨率: {actual_w}x{actual_h}")
 
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        # AVI + MJPG 编码最快，避免 MP4 格式不支持 MJPG 导致回退到慢速 mp4v
-        path = self.recording_dir / f"session_{timestamp}.avi"
+        # H.264 MP4 录制（FFmpeg 管道写入）
+        path = self.recording_dir / f"session_{timestamp}.mp4"
         self.last_recording_path = path
 
         # 创建录制队列和写线程
@@ -325,56 +326,52 @@ class CameraManager:
         return path
 
     def _writer_loop(self, path: Path, actual_w: int, actual_h: int):
-        """后台写线程：从队列取帧并写入视频（参数由主线程传入，避免跨线程访问 self._cap）"""
+        """后台写线程：从队列取帧 → FFmpeg 管道写入 H.264 MP4（回退 OpenCV MJPG AVI）"""
         # 检测 ffmpeg
-        ffmpeg_available = False
-        try:
-            import shutil
-            ffmpeg_available = shutil.which("ffmpeg") is not None
-        except Exception:
-            pass
+        import shutil
+        ffmpeg_available = shutil.which("ffmpeg") is not None
 
+        proc = None
         writer = None
         try:
             if ffmpeg_available:
-                try:
-                    from vidgear.gears import WriteGear
-                    output_params = {
-                        "-vcodec": "libx264",
-                        "-crf": "23",
-                        "-preset": "fast",
-                        "-input_framerate": int(self.config.record_fps),
-                        "-pix_fmt": "yuv420p",
-                    }
-                    writer = WriteGear(
-                        output=str(path),
-                        compression_mode=True,
-                        logging=False,
-                        **output_params,
-                    )
-                    logger.info(f"WriteGear 写线程已启动: {path}")
-                except Exception as e:
-                    logger.error(f"WriteGear 初始化失败: {e}")
-                    ffmpeg_available = False
-
-            if not ffmpeg_available:
-                # 回退到 OpenCV VideoWriter，使用 MJPG 编码（最快）
+                # FFmpeg 子进程管道：rawvideo → libx264
+                capture_fps = getattr(self, '_capture_fps', 5.0)
+                input_fps = max(capture_fps, 3.0)
+                cmd = [
+                    'ffmpeg', '-y', '-loglevel', 'error',
+                    '-f', 'rawvideo', '-vcodec', 'rawvideo',
+                    '-s', f'{actual_w}x{actual_h}', '-pix_fmt', 'bgr24',
+                    '-r', str(input_fps),
+                    '-i', 'pipe:0',
+                    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+                    '-pix_fmt', 'yuv420p',
+                    str(path),
+                ]
+                proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+                logger.info(
+                    f"FFmpeg 管道写线程已启动 (H.264, CRF23, {input_fps}fps): {path} "
+                    f"({actual_w}x{actual_h})"
+                )
+            else:
+                # 回退到 OpenCV VideoWriter，使用 MJPG 编码
+                fallback_path = Path(str(path).replace('.mp4', '.avi'))
                 fourcc = cv2.VideoWriter_fourcc(*"MJPG")
                 writer = cv2.VideoWriter(
-                    str(path), fourcc, self.config.record_fps,
+                    str(fallback_path), fourcc, self.config.record_fps,
                     (actual_w, actual_h),
                 )
                 if not writer.isOpened():
-                    raise RuntimeError(f"VideoWriter 打开失败: {path} ({actual_w}x{actual_h})")
-                logger.info(f"VideoWriter 写线程已启动 (MJPG): {path} ({actual_w}x{actual_h})")
+                    raise RuntimeError(f"VideoWriter 打开失败: {fallback_path} ({actual_w}x{actual_h})")
+                # 更新录制路径为回退路径
+                self.last_recording_path = fallback_path
+                logger.info(f"VideoWriter 写线程已启动 (MJPG, 回退): {fallback_path} ({actual_w}x{actual_h})")
 
             last_hb = time.time()
             while not self._writer_stop_event.is_set() or not self._record_queue.empty():
                 try:
                     frame = self._record_queue.get(timeout=0.5)
                     if frame is None:
-                        continue
-                    if writer is None:
                         continue
 
                     # 每 5 秒写线程健康检查
@@ -386,23 +383,50 @@ class CameraManager:
                     fh, fw = frame.shape[:2]
                     if fw != actual_w or fh != actual_h:
                         frame = cv2.resize(frame, (actual_w, actual_h))
-                    t_w = time.time()
-                    writer.write(frame)
-                    dt_w = time.time() - t_w
-                    if dt_w > 0.05:
-                        logger.debug(f"[写线程] writer.write 耗时 {dt_w*1000:.0f}ms")
+
+                    if proc is not None:
+                        t_w = time.time()
+                        try:
+                            proc.stdin.write(frame.tobytes())
+                        except (BrokenPipeError, OSError):
+                            logger.error("FFmpeg 管道已断开，停止写入")
+                            break
+                        dt_w = time.time() - t_w
+                        if dt_w > 0.05:
+                            logger.debug(f"[写线程] FFmpeg 管道写入耗时 {dt_w*1000:.0f}ms")
+                    elif writer is not None:
+                        t_w = time.time()
+                        writer.write(frame)
+                        dt_w = time.time() - t_w
+                        if dt_w > 0.05:
+                            logger.debug(f"[写线程] writer.write 耗时 {dt_w*1000:.0f}ms")
+                    else:
+                        continue
                     self._frame_count += 1
                 except queue.Empty:
                     continue
                 except Exception as e:
                     logger.error(f"写帧失败: {e}")
         finally:
+            # 关闭 FFmpeg 管道
+            if proc is not None:
+                try:
+                    proc.stdin.close()
+                except Exception:
+                    pass
+                try:
+                    proc.wait(timeout=30)
+                except Exception as e:
+                    logger.warning(f"FFmpeg 进程等待超时: {e}")
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                proc = None
+            # 关闭 OpenCV writer
             if writer is not None:
                 try:
-                    if hasattr(writer, "close"):
-                        writer.close()
-                    else:
-                        writer.release()
+                    writer.release()
                 except Exception as e:
                     logger.error(f"释放 writer 出错: {e}")
             logger.info(f"写线程结束，共写入 {self._frame_count} 帧")
@@ -540,9 +564,11 @@ class CameraManager:
 
         path = self.last_recording_path
         duration = time.time() - self._recording_start
+        actual_fps = self._frame_count / max(duration, 0.1)
+
         logger.info(
             f"录制结束: {path}, 帧数={self._frame_count}, "
-            f"时长={duration:.1f}s, 实际FPS={self._frame_count/max(duration,0.1):.1f}, "
+            f"时长={duration:.1f}s, 实际FPS={actual_fps:.1f}, "
             f"音频WAV={self._audio_wav_path}"
         )
         return path

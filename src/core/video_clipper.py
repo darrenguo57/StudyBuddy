@@ -754,8 +754,7 @@ class VideoClipper:
                 "-c:v", "libx264",
                 "-preset", "medium",
                 "-crf", "23",
-                "-c:a", "aac",
-                "-b:a", "128k",
+                "-an",
                 "-pix_fmt", "yuv420p",
                 str(pre_output),
             ]
@@ -779,15 +778,14 @@ class VideoClipper:
 
             self._report("混入背景音乐...", 99, progress_callback)
 
-            # 混入 BGM
+            # BGM 作为唯一音轨（不混入麦克风录音）
             cmd2 = [
                 ffmpeg, "-y",
                 "-i", str(pre_output),
                 "-i", self.config.bgm_path,
                 "-filter_complex",
-                f"[1:a]aloop=loop=-1:size=2e9,atrim=duration={total_dur:.2f},"
-                f"volume={self.config.bgm_volume}[bgm];"
-                f"[0:a][bgm]amix=inputs=2:duration=first[a]",
+                f"[1:0]aloop=loop=-1:size=2e9,atrim=duration={total_dur:.2f},"
+                f"volume={self.config.bgm_volume}[a]",
                 "-map", "0:v",
                 "-map", "[a]",
                 "-c:v", "copy",
@@ -816,8 +814,7 @@ class VideoClipper:
                 "-c:v", "libx264",
                 "-preset", "medium",
                 "-crf", "23",
-                "-c:a", "aac",
-                "-b:a", "128k",
+                "-an",
                 "-pix_fmt", "yuv420p",
                 str(output_path),
             ]

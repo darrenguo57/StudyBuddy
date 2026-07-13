@@ -802,7 +802,7 @@ class MainWindow(QMainWindow):
 
         raw_path = self.camera.stop_recording()
 
-        # 合并音频（AVI + WAV → MP4）
+        # 合并音频（MP4 + WAV → MP4）
         wav_path = self.camera.get_audio_wav_path()
         if raw_path and raw_path.exists() and wav_path and wav_path.exists():
             mp4_path = raw_path.parent / f"{raw_path.stem}_audio.mp4"
@@ -894,33 +894,42 @@ class MainWindow(QMainWindow):
         """每秒定时更新"""
         t_start = time.time()
         if self._is_running and not self._is_paused:
+            t0 = time.time()
             self._session_seconds += 1
             minutes = self._session_seconds // 60
             seconds = self._session_seconds % 60
             self.timer_widget.set_time(minutes, seconds)
             self.stat_duration.set_value(str(minutes))
+            dt_ui = time.time() - t0
 
             # 真实坐姿检测更新
             t1 = time.time()
             self._update_posture_status()
-            dt1 = time.time() - t1
-            if dt1 > 0.2:
-                logger.warning(f"[主线程] _update_posture_status 耗时 {dt1*1000:.0f}ms")
+            dt_posture = time.time() - t1
 
             # 专注度 UI 更新
+            t2 = time.time()
             self._update_focus_status()
+            dt_focus = time.time() - t2
 
             # 手机端姿态提醒检查（每5秒轮询一次）
+            dt_mobile = 0.0
             if self._session_seconds % 5 == 0:
+                t3 = time.time()
                 self._check_mobile_posture_alert()
+                dt_mobile = time.time() - t3
 
             # 鼓励语音
             if minutes > 0 and minutes % 15 == 0 and seconds == 0:
                 self.voice.encourage(minutes)
 
-        total = time.time() - t_start
-        if total > 0.5:
-            logger.warning(f"[主线程] _on_timer_tick 总耗时 {total*1000:.0f}ms")
+            total = time.time() - t_start
+            if total > 0.5:
+                logger.warning(
+                    f"[主线程] _on_timer_tick 总耗时 {total*1000:.0f}ms "
+                    f"(ui={dt_ui*1000:.0f}ms posture={dt_posture*1000:.0f}ms "
+                    f"focus={dt_focus*1000:.0f}ms mobile={dt_mobile*1000:.0f}ms)"
+                )
 
     def _update_focus_status(self):
         """更新专注度 UI 显示"""
@@ -1149,7 +1158,7 @@ class MainWindow(QMainWindow):
             logger.info(f"音视频合并成功: {output_path}")
             return True
         except FileNotFoundError:
-            logger.warning("ffmpeg 未找到，跳过音视频合并，保留纯视频 AVI")
+            logger.warning("ffmpeg 未找到，跳过音视频合并，保留纯视频")
             return False
         except subprocess.TimeoutExpired:
             logger.error("音视频合并超时 (120s)")
@@ -1265,7 +1274,7 @@ class MainWindow(QMainWindow):
             audio_wav = raw_dir / f"audio_{raw_stem.split('_')[0] if '_' in raw_stem else raw_stem}.wav"
             _safe_remove(audio_wav, "音频WAV")
 
-            # 合并后的过程 MP4（原始 AVI 被 merge 替换后，合并版以 _audio.mp4 结尾）
+            # 合并后的过程 MP4（原始录像被 merge 替换后，合并版以 _audio.mp4 结尾）
             merged_mp4 = raw_dir / f"{raw_stem}_audio.mp4"
             _safe_remove(merged_mp4, "合并MP4")
 
