@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mila 暑假作业计划表 · 30天</title>
+<style>
+  :root {
+    --bg: #FAFAF8;
+    --surface: #FFFFFF;
+    --ink: #1C1C1E;
+    --muted: #6E6E73;
+    --rule: #E5E5EA;
+    --accent: #E8753A;
+    --accent2: #34C759;
+    --accent3: #0A84FF;
+    --accent4: #FF9500;
+    --warm: #FFF5EE;
+    --green-bg: #F0FFF4;
+    --blue-bg: #F0F7FF;
+    --orange-bg: #FFF8F0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    margin: 0;
+    padding: 24px 16px;
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    text-align: center;
+    padding: 32px 20px 24px;
+    background: var(--surface);
+    border-radius: 20px;
+    margin-bottom: 24px;
+    border: 1px solid var(--rule);
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }
+  .header .subtitle {
+    color: var(--muted);
+    font-size: 15px;
+    margin-bottom: 16px;
+  }
+  .header .badge-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .badge-math { background: #FFF0E8; color: var(--accent); }
+  .badge-eng { background: var(--blue-bg); color: var(--accent3); }
+  .badge-pe { background: var(--green-bg); color: var(--accent2); }
+  .badge-chinese { background: var(--orange-bg); color: #D46A00; }
+
+  /* Section cards */
+  .section {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+    border: 1px solid var(--rule);
+  }
+  .section h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section h2 .icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+  .icon-math { background: #FFF0E8; }
+  .icon-eng { background: var(--blue-bg); }
+  .icon-pe { background: var(--green-bg); }
+  .icon-chinese { background: var(--orange-bg); }
+
+  /* Overview grid */
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .overview-item {
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid var(--rule);
+  }
+  .overview-item .label {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .overview-item .value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  /* Schedule table */
+  .schedule-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+  }
+  .schedule-table th {
+    background: var(--bg);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 10px 6px;
+    text-align: left;
+    border-bottom: 2px solid var(--rule);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .schedule-table td {
+    padding: 10px 6px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  .schedule-table tr:hover td {
+    background: rgba(232,117,58,0.03);
+  }
+  .day-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .day-normal { background: var(--bg); color: var(--muted); }
+  .day-uclass { background: var(--accent3); color: #fff; }
+  .day-weekend { background: var(--green-bg); color: var(--accent2); }
+  .day-review { background: var(--warm); color: var(--accent); }
+
+  .task-tag {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 3px;
+    margin-bottom: 2px;
+    line-height: 1.4;
+  }
+  .tag-math { background: #FFF0E8; color: #C45F2E; }
+  .tag-eng { background: #E8F0FF; color: #0A5FBF; }
+  .tag-pe { background: #E8F5E9; color: #2E7D32; }
+  .tag-review { background: #FFF8E1; color: #F57C00; }
+  .tag-feature { background: #F3E5F5; color: #7B1FA2; }
+  .tag-chinese { background: #FFF3E0; color: #E65100; }
+
+  .task-list {
+    margin: 0;
+    padding-left: 16px;
+  }
+  .task-list li {
+    margin-bottom: 3px;
+    color: var(--ink);
+  }
+  .task-list li.muted {
+    color: var(--muted);
+  }
+
+  /* Phase divider */
+  .phase-row td {
+    background: var(--bg);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+    padding: 8px;
+    border-bottom: 2px solid var(--rule);
+  }
+
+  /* Tips */
+  .tips {
+    background: var(--warm);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-top: 16px;
+  }
+  .tips h4 {
+    margin: 0 0 8px;
+    font-size: 15px;
+    color: var(--accent);
+  }
+  .tips ul {
+    margin: 0;
+    padding-left: 18px;
+  }
+  .tips li {
+    margin-bottom: 4px;
+    font-size: 14px;
+  }
+
+  /* Print */
+  @media print {
+    body { background: #fff; padding: 0; }
+    .section { border: 1px solid #ddd; break-inside: avoid; }
+    .schedule-table { font-size: 11px; }
+    .schedule-table th { background: #f5f5f5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .day-uclass, .day-weekend, .day-review { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+
+  /* Calendar grid */
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+  }
+  .calendar-day {
+    border-radius: 10px;
+    padding: 10px 6px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid var(--rule);
+    background: var(--surface);
+    position: relative;
+    min-height: 72px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .calendar-day:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .calendar-day.done {
+    background: var(--green-bg);
+    border-color: var(--accent2);
+  }
+  .calendar-day.uclass {
+    background: var(--blue-bg);
+    border-color: var(--accent3);
+  }
+  .calendar-day.weekend {
+    background: var(--green-bg);
+    border-color: var(--accent2);
+  }
+  .calendar-day.feature {
+    background: var(--warm);
+    border-color: var(--accent);
+  }
+  .calendar-day .day-num {
+    font-size: 18px;
+    font-weight: 700;
+    width: auto; height: auto;
+    background: none;
+    color: var(--ink);
+    margin-bottom: 2px;
+  }
+  .calendar-day .day-week {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .calendar-day .day-tag {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .calendar-day .check-icon {
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent2);
+    color: #fff;
+    font-size: 11px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .calendar-day.done .check-icon {
+    display: flex;
+  }
+  .calendar-day.selected {
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+  .detail-card {
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 14px;
+    border: 1px solid var(--rule);
+  }
+  .detail-card h4 {
+    margin: 0 0 8px;
+    font-size: 14px;
+  }
+  .detail-card label {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    color: var(--ink);
+  }
+  .detail-card label input[type="checkbox"] {
+    margin-right: 6px;
+  }
+
+  @media (max-width: 640px) {
+    .schedule-table th, .schedule-table td { padding: 8px 4px; font-size: 11px; }
+    .task-tag { font-size: 10px; padding: 1px 4px; }
+    .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .calendar-day { min-height: 58px; padding: 6px 2px; }
+    .calendar-day .day-num { font-size: 14px; }
+    .calendar-day .day-week { font-size: 10px; }
+    .calendar-day .day-tag { font-size: 9px; padding: 1px 3px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>🌞 Mila 暑假作业计划表</h1>
+    <div class="subtitle">三年级升四年级 · 30天每日任务安排 · 2026年暑假</div>
+    <div class="badge-row">
+      <span class="badge badge-math">📐 数学</span>
+      <span class="badge badge-chinese">📖 语文</span>
+      <span class="badge badge-eng">🔤 英语</span>
+      <span class="badge badge-pe">🏃 体育</span>
+    </div>
+  </div>
+
+  <!-- Overview -->
+  <div class="section">
+    <h2><span class="icon icon-math">📋</span>计划概览</h2>
+    <div class="overview-grid">
+      <div class="overview-item">
+        <div class="label">数学 · 基础巩固</div>
+        <div class="value">每日一练 15天</div>
+      </div>
+      <div class="overview-item">
+        <div class="label">数学 · 拓展提升</div>
+        <div class="value">特色作业 5天</div>
+      </div>
+      <div class="overview-item">
+        <div class="label">数学 · 预习新知</div>
+        <div class="value">四上预习 10天</div>
+      </div>
+      <div class="overview-item">
+        <div class="label">语文 · 阅读计划</div>
+        <div class="value">每天30分钟</div>
+      </div>
+      <div class="overview-item">
+        <div class="label">语文 · 书法练字</div>
+        <div class="value">周一至周五</div>
+      </div>
+      <div class="overview-item">
+        <div class="label">语文 · 背诵积累</div>
+        <div class="value">古诗+日积月累</div>
+      </div>
+      <div class="overview-item">
+        <div class="label">语文 · 写作训练</div>
+        <div class="value">作文4篇+日记4篇</div>
+      </div>
+      <div class="overview-item">
+        <div class="label">英语 · 朗读巩固</div>
+        <div class="value">三上+三下 每天</div>
+      </div>
+      <div class="overview-item">
+        <div class="label">英语 · 预习四上</div>
+        <div class="value">Module 1-10</div>
+      </div>
+      <div class="overview-item">
+        <div class="label">英语 · 单词书写</div>
+        <div class="value">抄写+听写闯关</div>
+      </div>
+      <div class="overview-item">
+        <div class="label">体育 · 每日热身</div>
+        <div class="value">2分钟 每天</div>
+      </div>
+      <div class="overview-item">
+        <div class="label">体育 · 主项目</div>
+        <div class="value">周一到周五轮换</div>
+      </div>
+    </div>
+    <div class="tips">
+      <h4>💡 每日建议用时</h4>
+      <ul>
+        <li><strong>上午 9:00-10:30</strong>：数学（约40分钟）+ 语文阅读（30分钟）= 约1.5小时</li>
+        <li><strong>下午 3:00-4:00</strong>：语文练字/背诵（约20分钟）+ 英语抄写/预习（约20分钟）+ 体育（约20-30分钟）= 约1小时</li>
+        <li><strong>晚上 7:00-7:30</strong>：英语课文朗读 + 语文背诵复习 = 约30分钟</li>
+        <li>每日总用时约 <strong>2.5-3小时</strong>，周末适当减量，劳逸结合</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 30-Day Schedule -->
+  <div class="section">
+    <h2><span class="icon icon-eng">📅</span>30天每日任务明细</h2>
+    <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
+      🔵 蓝色圆圈 = U学线上练习日（周一/周四） &nbsp;|&nbsp;
+      🟢 绿色 = 周末 &nbsp;|&nbsp;
+      🟠 橙色 = 复习/阶段小结 &nbsp;|&nbsp;
+      📖 语文每日阅读30分钟为必做项
+    </p>
+    <div style="overflow-x: auto;">
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th style="width:36px">天</th>
+            <th style="width:46px">日期</th>
+            <th style="min-width:140px">数学</th>
+            <th style="min-width:150px">语文</th>
+            <th style="min-width:200px">英语</th>
+            <th style="min-width:160px">体育</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- Phase 1: Days 1-7 -->
+          <tr class="phase-row"><td colspan="6">📚 第一阶段：基础巩固期（第1-7天）</td></tr>
+          <tr>
+            <td><span class="day-num day-uclass">1</span></td>
+            <td>周一</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第1天</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《中国古代神话》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>四上古诗第1首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上 U1-U2 课文+单词<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 1 Unit 1<br>
+              <span class="task-tag tag-review">U学练习</span>完成第一次线上练习
+            </td>
+            <td><span class="task-tag tag-pe">高抬腿</span>30次×3组<br><span class="task-tag tag-pe">坐位体前屈</span>15秒×3次</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-normal">2</span></td>
+            <td>周二</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第2天</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《中国古代神话》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>四上古诗第2首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上 U3-U4 课文+单词<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 1 Unit 2<br>
+              <span class="task-tag tag-eng">抄写</span>三上 U1 单词（2英1汉）
+            </td>
+            <td><span class="task-tag tag-pe">跳绳</span>1分钟×3次<br><span class="task-tag tag-pe">单脚站立</span>比赛</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-normal">3</span></td>
+            <td>周三</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第3天</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《中国古代神话》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>四上古诗第3首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上 U5-U6 课文+单词<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 2 Unit 1<br>
+              <span class="task-tag tag-eng">抄写</span>三上 U2 单词（2英1汉）
+            </td>
+            <td><span class="task-tag tag-pe">深蹲</span>12次×2组<br><span class="task-tag tag-pe">开合跳</span>25次×3组</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-uclass">4</span></td>
+            <td>周四</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第4天</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《中国古代神话》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>四上日积月累第1组
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三下 U1-U2 课文+单词<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 2 Unit 2<br>
+              <span class="task-tag tag-review">U学练习</span>完成第二次线上练习
+            </td>
+            <td><span class="task-tag tag-pe">平板支撑</span>20秒×2组<br><span class="task-tag tag-pe">后踢腿</span>30次×2组</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-normal">5</span></td>
+            <td>周五</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第5天</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《中国古代神话》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>四上古诗第4首<br>
+              <span class="task-tag tag-feature">作文</span>观察日记
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三下 U3-U4 课文+单词<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 3 Unit 1<br>
+              <span class="task-tag tag-eng">抄写</span>三上 U3 单词（2英1汉）
+            </td>
+            <td><span class="task-tag tag-pe">高抬腿</span>25次×3组<br><span class="task-tag tag-pe">靠墙静蹲</span>30秒×2组</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-weekend">6</span></td>
+            <td>周六</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第6天（减量）</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《中国古代神话》30min<br>
+              <span class="task-tag tag-chinese">背诵</span>四上古诗第5首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上+三下 各1单元复习<br>
+              <span class="task-tag tag-eng">抄写</span>三上 U4 单词（2英1汉）
+            </td>
+            <td><span class="task-tag tag-pe">户外活动</span>散步/慢跑/拍球 15分钟</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-weekend">7</span></td>
+            <td>周日</td>
+            <td><span class="task-tag tag-review">休息</span> 无数学作业</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《中国古代神话》30min<br>
+              <span class="task-tag tag-chinese">背诵</span>四上古诗第6首<br>
+              <span class="task-tag tag-review">阶段小结</span>本周背诵复习
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上+三下 自由复习<br>
+              <span class="task-tag tag-review">阶段小结</span>回顾本周预习的3个模块
+            </td>
+            <td><span class="task-tag tag-pe">主动休息</span>擦桌子/整理玩具<br><span class="task-tag tag-pe">散步</span>10分钟</td>
+          </tr>
+
+          <!-- Phase 2: Days 8-15 -->
+          <tr class="phase-row"><td colspan="6">📖 第二阶段：持续巩固期（第8-15天）</td></tr>
+          <tr>
+            <td><span class="day-num day-uclass">8</span></td>
+            <td>周一</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第7天</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《世界经典神话》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>四上日积月累第2组<br>
+              <span class="task-tag tag-feature">日记</span>第1篇
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三下 U5-U6 课文+单词<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 3 Unit 2<br>
+              <span class="task-tag tag-review">U学练习</span>第三次线上练习<br>
+              <span class="task-tag tag-eng">抄写</span>三上 U5 单词
+            </td>
+            <td><span class="task-tag tag-pe">高抬腿</span>30次×3组<br><span class="task-tag tag-pe">坐位体前屈</span>15秒×3次</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-normal">9</span></td>
+            <td>周二</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第8天</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《世界经典神话》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第1首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上全册 快速过一遍<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 4 Unit 1<br>
+              <span class="task-tag tag-eng">抄写</span>三上 U6 单词
+            </td>
+            <td><span class="task-tag tag-pe">跳绳</span>1分钟×3次<br><span class="task-tag tag-pe">单脚站立</span>比赛</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-normal">10</span></td>
+            <td>周三</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第9天</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《世界经典神话》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第2首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三下全册 快速过一遍<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 4 Unit 2<br>
+              <span class="task-tag tag-eng">抄写</span>三下 U1 单词
+            </td>
+            <td><span class="task-tag tag-pe">深蹲</span>12次×2组<br><span class="task-tag tag-pe">开合跳</span>25次×3组</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-uclass">11</span></td>
+            <td>周四</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第10天</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《世界经典神话》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第3首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上 U1-U3 复习<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 5 Unit 1<br>
+              <span class="task-tag tag-review">U学练习</span>第四次线上练习<br>
+              <span class="task-tag tag-eng">抄写</span>三下 U2 单词
+            </td>
+            <td><span class="task-tag tag-pe">平板支撑</span>20秒×2组<br><span class="task-tag tag-pe">后踢腿</span>30次×2组</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-normal">12</span></td>
+            <td>周五</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第11天</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《世界经典神话》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第4首<br>
+              <span class="task-tag tag-feature">作文</span>《我最喜爱的地方》
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三下 U4-U6 复习<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 5 Unit 2<br>
+              <span class="task-tag tag-eng">抄写</span>三下 U3 单词
+            </td>
+            <td><span class="task-tag tag-pe">高抬腿</span>25次×3组<br><span class="task-tag tag-pe">靠墙静蹲</span>30秒×2组</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-weekend">13</span></td>
+            <td>周六</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第12天（减量）</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《世界经典神话》30min<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第5首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上+三下 各选2单元复习<br>
+              <span class="task-tag tag-eng">抄写</span>三下 U4 单词<br>
+              <span class="task-tag tag-review">阶段小结</span>已预习 Module 1-5
+            </td>
+            <td><span class="task-tag tag-pe">户外活动</span>散步/慢跑/拍球 15分钟</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-weekend">14</span></td>
+            <td>周日</td>
+            <td><span class="task-tag tag-review">休息</span> 无数学作业</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《世界经典神话》30min<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第6首<br>
+              <span class="task-tag tag-review">阶段小结</span>本周背诵复习
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上+三下 自由复习<br>
+              <span class="task-tag tag-eng">抄写</span>三下 U5 单词
+            </td>
+            <td><span class="task-tag tag-pe">主动休息</span>家务+散步10分钟</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-uclass">15</span></td>
+            <td>周一</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第13天</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《世界经典神话》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>四上古诗复习<br>
+              <span class="task-tag tag-feature">日记</span>第2篇
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上+三下 抽查复习<br>
+              <span class="task-tag tag-eng">抄写</span>三下 U6 单词（三上抄写完成）<br>
+              <span class="task-tag tag-review">U学练习</span>第五次线上练习
+            </td>
+            <td><span class="task-tag tag-pe">高抬腿</span>30次×3组<br><span class="task-tag tag-pe">坐位体前屈</span>15秒×3次</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-normal">16</span></td>
+            <td>周二</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第14天</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《希腊神话故事》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第7首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上+三下 全册快速过<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 6 Unit 1<br>
+              <span class="task-tag tag-review">听写</span>三上 U1-U3 单词自测
+            </td>
+            <td><span class="task-tag tag-pe">跳绳</span>1分钟×3次<br><span class="task-tag tag-pe">单脚站立</span>比赛</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-normal">17</span></td>
+            <td>周三</td>
+            <td><span class="task-tag tag-math">每日一练</span> 第15天 ✅</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《希腊神话故事》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第8首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上+三下 全册快速过<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 6 Unit 2<br>
+              <span class="task-tag tag-review">听写</span>三上 U4-U6 单词自测
+            </td>
+            <td><span class="task-tag tag-pe">深蹲</span>12次×2组<br><span class="task-tag tag-pe">开合跳</span>25次×3组</td>
+          </tr>
+
+          <!-- Phase 3: Days 18-22 -->
+          <tr class="phase-row"><td colspan="6">🎨 第三阶段：特色作业期（第18-22天）</td></tr>
+          <tr>
+            <td><span class="day-num day-uclass">18</span></td>
+            <td>周四</td>
+            <td><span class="task-tag tag-feature">特色作业</span> 第1天<br><span class="task-tag tag-math">数学手抄报</span></td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《希腊神话故事》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第9首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>四上 Module 1-3 复习<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 7 Unit 1<br>
+              <span class="task-tag tag-review">U学练习</span>第六次线上练习<br>
+              <span class="task-tag tag-review">听写</span>三下 U1-U3 单词自测
+            </td>
+            <td><span class="task-tag tag-pe">平板支撑</span>20秒×2组<br><span class="task-tag tag-pe">后踢腿</span>30次×2组</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-normal">19</span></td>
+            <td>周五</td>
+            <td><span class="task-tag tag-feature">特色作业</span> 第2天<br><span class="task-tag tag-math">生活中的数学</span></td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《希腊神话故事》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第10首<br>
+              <span class="task-tag tag-feature">作文</span>《我和谁过一天》
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>四上 Module 4-5 复习<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 7 Unit 2<br>
+              <span class="task-tag tag-review">听写</span>三下 U4-U6 单词自测
+            </td>
+            <td><span class="task-tag tag-pe">高抬腿</span>25次×3组<br><span class="task-tag tag-pe">靠墙静蹲</span>30秒×2组</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-weekend">20</span></td>
+            <td>周六</td>
+            <td><span class="task-tag tag-feature">特色作业</span> 第3天<br><span class="task-tag tag-math">数学思维题</span></td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《希腊神话故事》30min<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第11首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>四上 Module 1-5 全复习<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 8 Unit 1<br>
+              <span class="task-tag tag-review">超前熟读</span>四上 Module 1-3 课文
+            </td>
+            <td><span class="task-tag tag-pe">户外活动</span>散步/慢跑/拍球 15分钟</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-weekend">21</span></td>
+            <td>周日</td>
+            <td><span class="task-tag tag-feature">特色作业</span> 第4天<br><span class="task-tag tag-math">数学日记</span></td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《希腊神话故事》30min<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第12首<br>
+              <span class="task-tag tag-review">阶段小结</span>本周背诵复习
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>四上 Module 6 复习<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 8 Unit 2<br>
+              <span class="task-tag tag-review">超前熟读</span>四上 Module 4-5 课文
+            </td>
+            <td><span class="task-tag tag-pe">主动休息</span>家务+散步10分钟</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-uclass">22</span></td>
+            <td>周一</td>
+            <td><span class="task-tag tag-feature">特色作业</span> 第5天 ✅<br><span class="task-tag tag-math">数学小调查</span></td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《希腊神话故事》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第13首<br>
+              <span class="task-tag tag-feature">日记</span>第3篇
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>四上 Module 7 复习<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 9 Unit 1<br>
+              <span class="task-tag tag-review">U学练习</span>第七次线上练习<br>
+              <span class="task-tag tag-review">超前熟读</span>四上 Module 6 课文
+            </td>
+            <td><span class="task-tag tag-pe">高抬腿</span>30次×3组<br><span class="task-tag tag-pe">坐位体前屈</span>15秒×3次</td>
+          </tr>
+
+          <!-- Phase 4: Days 23-30 -->
+          <tr class="phase-row"><td colspan="6">🚀 第四阶段：预习冲刺期（第23-30天）</td></tr>
+          <tr>
+            <td><span class="day-num day-normal">23</span></td>
+            <td>周二</td>
+            <td><span class="task-tag tag-math">预习新知</span> 四上数学第1单元</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《山海经》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第14首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>四上 Module 8 复习<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 9 Unit 2<br>
+              <span class="task-tag tag-review">超前熟读</span>四上 Module 7 课文
+            </td>
+            <td><span class="task-tag tag-pe">跳绳</span>1分钟×3次<br><span class="task-tag tag-pe">单脚站立</span>比赛</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-normal">24</span></td>
+            <td>周三</td>
+            <td><span class="task-tag tag-math">预习新知</span> 四上数学第2单元</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《山海经》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第15首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>四上 Module 9 复习<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 10 Unit 1<br>
+              <span class="task-tag tag-review">超前熟读</span>四上 Module 8 课文
+            </td>
+            <td><span class="task-tag tag-pe">深蹲</span>12次×2组<br><span class="task-tag tag-pe">开合跳</span>25次×3组</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-uclass">25</span></td>
+            <td>周四</td>
+            <td><span class="task-tag tag-math">预习新知</span> 四上数学第3单元</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《山海经》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第16首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>四上 Module 10 复习<br>
+              <span class="task-tag tag-eng">预习</span>四上 Module 10 Unit 2 ✅<br>
+              <span class="task-tag tag-review">U学练习</span>第八次线上练习<br>
+              <span class="task-tag tag-review">超前熟读</span>四上 Module 9 课文
+            </td>
+            <td><span class="task-tag tag-pe">平板支撑</span>20秒×2组<br><span class="task-tag tag-pe">后踢腿</span>30次×2组</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-normal">26</span></td>
+            <td>周五</td>
+            <td><span class="task-tag tag-math">预习新知</span> 四上数学第4单元<br><span class="task-tag tag-math">家长练习</span></td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《山海经》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第17首<br>
+              <span class="task-tag tag-feature">作文</span>《暑假万花筒》
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>四上 Module 1-5 全复习<br>
+              <span class="task-tag tag-review">超前熟读</span>四上 Module 10 课文<br>
+              <span class="task-tag tag-review">听写</span>四上 Module 1-3 单词（选做）
+            </td>
+            <td><span class="task-tag tag-pe">高抬腿</span>25次×3组<br><span class="task-tag tag-pe">靠墙静蹲</span>30秒×2组</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-weekend">27</span></td>
+            <td>周六</td>
+            <td><span class="task-tag tag-math">预习新知</span> 四上数学第5单元<br><span class="task-tag tag-math">家长练习</span></td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《山海经》30min<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第18首
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>四上 Module 6-10 全复习<br>
+              <span class="task-tag tag-review">超前熟读</span>四上全册课文过一遍<br>
+              <span class="task-tag tag-review">听写</span>四上 Module 4-6 单词（选做）
+            </td>
+            <td><span class="task-tag tag-pe">户外活动</span>散步/慢跑/拍球 15分钟</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-weekend">28</span></td>
+            <td>周日</td>
+            <td><span class="task-tag tag-review">休息</span> 无数学作业</td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《山海经》30min<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第19首<br>
+              <span class="task-tag tag-review">阶段小结</span>本周背诵复习
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>四上全册快速复习<br>
+              <span class="task-tag tag-review">听写</span>四上 Module 7-8 单词（选做）
+            </td>
+            <td><span class="task-tag tag-pe">主动休息</span>家务+散步10分钟</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-uclass">29</span></td>
+            <td>周一</td>
+            <td><span class="task-tag tag-math">综合复习</span> 重点错题回顾<br><span class="task-tag tag-math">家长练习</span></td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《山海经》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>必背古诗第20首<br>
+              <span class="task-tag tag-feature">日记</span>第4篇
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上+三下 全册快速过<br>
+              <span class="task-tag tag-eng">朗读</span>四上 全册快速过<br>
+              <span class="task-tag tag-review">U学练习</span>第九次线上练习<br>
+              <span class="task-tag tag-review">听写</span>四上 Module 9-10 单词（选做）
+            </td>
+            <td><span class="task-tag tag-pe">高抬腿</span>30次×3组<br><span class="task-tag tag-pe">坐位体前屈</span>15秒×3次</td>
+          </tr>
+          <tr>
+            <td><span class="day-num day-review">30</span></td>
+            <td>周二</td>
+            <td><span class="task-tag tag-review">总结日</span> 整理作业+预习心得<br><span class="task-tag tag-math">家长练习</span></td>
+            <td>
+              <span class="task-tag tag-chinese">阅读</span>《山海经》30min<br>
+              <span class="task-tag tag-chinese">练字</span>钢笔字5个<br>
+              <span class="task-tag tag-chinese">背诵</span>古诗文总复习<br>
+              <span class="task-tag tag-review">🎉 暑假任务完成！</span>
+            </td>
+            <td>
+              <span class="task-tag tag-eng">朗读</span>三上+三下+四上 总复习<br>
+              <span class="task-tag tag-review">单词总听写</span>重点错词巩固<br>
+              <span class="task-tag tag-review">🎉 暑假任务完成！</span>
+            </td>
+            <td><span class="task-tag tag-pe">自由活动</span>选择最喜欢的一项运动<br><span class="task-tag tag-pe">奖励时间</span>🎁</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Chinese Homework Guide -->
+  <div class="section">
+    <h2><span class="icon icon-chinese">📖</span>语文暑假特色作业指引</h2>
+    <p style="color: var(--muted); font-size: 14px; margin-bottom: 16px;">
+      语文作业共四大板块：阅读、书法、背诵、写作。每天阅读30分钟为必做项，其他任务按表中分配完成。
+    </p>
+    <div class="overview-grid">
+      <div class="overview-item">
+        <div class="label">📚 阅读计划（每天30分钟）</div>
+        <div class="value" style="font-size:15px">
+          《中国古代神话》→《世界经典神话》→《希腊神话故事》→《山海经》<br>
+          <span style="font-size:12px;color:var(--muted)">自制读书计划表，记录阅读进度</span>
+        </div>
+      </div>
+      <div class="overview-item">
+        <div class="label">✍️ 书法练字（周一至周五）</div>
+        <div class="value" style="font-size:15px">
+          每周至少5次，每次5个字，用钢笔书写<br>
+          <span style="font-size:12px;color:var(--muted)">要求字体工整、美观、书面整洁</span>
+        </div>
+      </div>
+      <div class="overview-item">
+        <div class="label">📜 背诵积累（每天1首/篇）</div>
+        <div class="value" style="font-size:15px">
+          四上古诗+日积月累 + 必背古诗前100首<br>
+          <span style="font-size:12px;color:var(--muted)">家长监督并签字，对照背诵闯关表</span>
+        </div>
+      </div>
+      <div class="overview-item">
+        <div class="label">📝 写作训练</div>
+        <div class="value" style="font-size:15px">
+          作文4篇 + 日记4篇（300字以上）<br>
+          <span style="font-size:12px;color:var(--muted)">写在大作文本和日记本上，避免流水账</span>
+        </div>
+      </div>
+    </div>
+    <div class="tips" style="background: var(--orange-bg); margin-top: 16px;">
+      <h4 style="color: var(--accent4);">📋 作文题目清单</h4>
+      <ul>
+        <li><strong>作文1（第5天）</strong>：观察日记（植物或动物）</li>
+        <li><strong>作文2（第12天）</strong>：《我最喜爱的地方》</li>
+        <li><strong>作文3（第19天）</strong>：《我和谁过一天》（补神话或童话人物）</li>
+        <li><strong>作文4（第26天）</strong>：《暑假万花筒》（记录暑假印象深刻的小事）</li>
+        <li><strong>日记4篇（第8/15/22/29天）</strong>：每篇300字以上，写在日记本上，要有体会感受</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- English Module Guide -->
+  <div class="section">
+    <h2><span class="icon icon-eng">📘</span>四年级上册英语预习指引（外研社版）</h2>
+    <p style="color: var(--muted); font-size: 14px; margin-bottom: 16px;">
+      每天预习1个单元（Unit），10个模块共20个单元，计划中已经均匀分配到30天内。
+      每个Unit的预习步骤建议：① 看课文插图猜测大意 → ② 听音频跟读单词（3遍）→ ③ 听音频跟读课文（2遍）→ ④ 尝试自读1遍。
+    </p>
+    <div class="overview-grid">
+      <div class="overview-item">
+        <div class="label">Module 1</div>
+        <div class="value" style="font-size:15px">描述人物外貌特征<br><span style="font-size:12px;color:var(--muted)">tall, short, thin, fat...</span></div>
+      </div>
+      <div class="overview-item">
+        <div class="label">Module 2</div>
+        <div class="value" style="font-size:15px">方位与位置<br><span style="font-size:12px;color:var(--muted)">near, behind, next to...</span></div>
+      </div>
+      <div class="overview-item">
+        <div class="label">Module 3</div>
+        <div class="value" style="font-size:15px">正在做什么<br><span style="font-size:12px;color:var(--muted)">reading, taking pictures...</span></div>
+      </div>
+      <div class="overview-item">
+        <div class="label">Module 4</div>
+        <div class="value" style="font-size:15px">天气与季节<br><span style="font-size:12px;color:var(--muted)">sunny, windy, raining...</span></div>
+      </div>
+      <div class="overview-item">
+        <div class="label">Module 5</div>
+        <div class="value" style="font-size:15px">过去时·状态<br><span style="font-size:12px;color:var(--muted)">was, were, then, now...</span></div>
+      </div>
+      <div class="overview-item">
+        <div class="label">Module 6</div>
+        <div class="value" style="font-size:15px">食物与点餐<br><span style="font-size:12px;color:var(--muted)">Chinese fast food, want...</span></div>
+      </div>
+      <div class="overview-item">
+        <div class="label">Module 7</div>
+        <div class="value" style="font-size:15px">过去时·动作<br><span style="font-size:12px;color:var(--muted)">did, didn't, visited...</span></div>
+      </div>
+      <div class="overview-item">
+        <div class="label">Module 8</div>
+        <div class="value" style="font-size:15px">购物<br><span style="font-size:12px;color:var(--muted)">how much, expensive...</span></div>
+      </div>
+      <div class="overview-item">
+        <div class="label">Module 9</div>
+        <div class="value" style="font-size:15px">旅行与假期<br><span style="font-size:12px;color:var(--muted)">went, saw, had...</span></div>
+      </div>
+      <div class="overview-item">
+        <div class="label">Module 10</div>
+        <div class="value" style="font-size:15px">意外事件<br><span style="font-size:12px;color:var(--muted)">happened, fell, bumped...</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 打卡日历 -->
+  <div class="section">
+    <h2><span class="icon icon-pe">✅</span>30天打卡日历 — 每日完成一目了然</h2>
+
+    <!-- 进度总览 -->
+    <div style="background: var(--bg); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+      <div style="font-size: 15px; font-weight: 700;">总进度</div>
+      <div style="flex: 1; min-width: 200px;">
+        <div style="background: var(--rule); border-radius: 999px; height: 20px; overflow: hidden;">
+          <div id="progressBar" style="background: var(--accent); height: 100%; width: 0%; border-radius: 999px; transition: width 0.4s ease;"></div>
+        </div>
+      </div>
+      <div style="font-size: 15px; font-weight: 700; color: var(--accent);"><span id="completedCount">0</span> / 30 天</div>
+      <div id="progressPercent" style="font-size: 14px; color: var(--muted);">0%</div>
+    </div>
+
+    <!-- 图例 -->
+    <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; font-size: 13px; color: var(--muted);">
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px;height:14px;border-radius:4px;background:var(--accent2);display:inline-block;"></span> 已完成</span>
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px;height:14px;border-radius:4px;background:var(--surface);border:1.5px solid var(--rule);display:inline-block;"></span> 待完成</span>
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px;height:14px;border-radius:4px;background:var(--blue-bg);border:1.5px solid var(--accent3);display:inline-block;"></span> U学练习日</span>
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px;height:14px;border-radius:4px;background:var(--green-bg);border:1.5px solid var(--accent2);display:inline-block;"></span> 周末/休息</span>
+      <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px;height:14px;border-radius:4px;background:var(--warm);border:1.5px solid var(--accent);display:inline-block;"></span> 特色/总结</span>
+    </div>
+
+    <!-- 日历网格 -->
+    <div class="calendar-grid" id="calendarGrid">
+      <!-- JS will populate -->
+    </div>
+
+    <!-- 科目明细打卡 -->
+    <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--rule);">
+      <h3 style="font-size: 16px; margin: 0 0 12px;">📋 当日科目明细（点击下方日期后在此勾选）</h3>
+      <div id="dayDetail" style="background: var(--bg); border-radius: 12px; padding: 16px; color: var(--muted);">
+        点击上方任意日期，查看并勾选该日各科任务完成情况。
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align: center; color: var(--muted); font-size: 13px; padding: 20px;">
+    🌟 祝 Mila 暑假愉快，学习进步！坚持30天，开学领先一步！ 🌟<br>
+    计划生成日期：2026年7月7日
+  </div>
+
+</div>
+
+<script>
+(function() {
+  // 30天数据
+  const days = [
+    { d:1, w:'周一', type:'uclass', tag:'每日一练', math:'每日一练 第1天', chinese:'阅读《中国古代神话》30min + 练字5个 + 背诵四上古诗第1首', eng:'朗读三上U1-U2 + 预习四上M1U1 + U学练习', pe:'高抬腿30次×3组 + 坐位体前屈15秒×3次' },
+    { d:2, w:'周二', type:'normal', tag:'每日一练', math:'每日一练 第2天', chinese:'阅读《中国古代神话》30min + 练字5个 + 背诵四上古诗第2首', eng:'朗读三上U3-U4 + 预习四上M1U2 + 抄写三上U1单词', pe:'跳绳1分钟×3次 + 单脚站立比赛' },
+    { d:3, w:'周三', type:'normal', tag:'每日一练', math:'每日一练 第3天', chinese:'阅读《中国古代神话》30min + 练字5个 + 背诵四上古诗第3首', eng:'朗读三上U5-U6 + 预习四上M2U1 + 抄写三上U2单词', pe:'深蹲12次×2组 + 开合跳25次×3组' },
+    { d:4, w:'周四', type:'uclass', tag:'U学练习', math:'每日一练 第4天', chinese:'阅读《中国古代神话》30min + 练字5个 + 背诵四上日积月累第1组', eng:'朗读三下U1-U2 + 预习四上M2U2 + U学练习', pe:'平板支撑20秒×2组 + 后踢腿30次×2组' },
+    { d:5, w:'周五', type:'normal', tag:'每日一练', math:'每日一练 第5天', chinese:'阅读《中国古代神话》30min + 练字5个 + 背诵四上古诗第4首 + 作文：观察日记', eng:'朗读三下U3-U4 + 预习四上M3U1 + 抄写三上U3单词', pe:'高抬腿25次×3组 + 靠墙静蹲30秒×2组', extraType:'feature' },
+    { d:6, w:'周六', type:'weekend', tag:'周末', math:'每日一练 第6天（减量）', chinese:'阅读《中国古代神话》30min + 背诵四上古诗第5首', eng:'朗读复习 + 抄写三上U4单词', pe:'户外活动15分钟' },
+    { d:7, w:'周日', type:'weekend', tag:'休息', math:'无作业', chinese:'阅读《中国古代神话》30min + 背诵四上古诗第6首 + 阶段小结', eng:'自由复习 + 阶段小结M1-3', pe:'家务 + 散步10分钟' },
+    { d:8, w:'周一', type:'uclass', tag:'U学练习', math:'每日一练 第7天', chinese:'阅读《世界经典神话》30min + 练字5个 + 背诵四上日积月累第2组 + 日记第1篇', eng:'朗读三下U5-U6 + 预习四上M3U2 + U学练习 + 抄写三上U5单词', pe:'高抬腿30次×3组 + 坐位体前屈15秒×3次' },
+    { d:9, w:'周二', type:'normal', tag:'每日一练', math:'每日一练 第8天', chinese:'阅读《世界经典神话》30min + 练字5个 + 背诵必背古诗第1首', eng:'朗读三上全册 + 预习四上M4U1 + 抄写三上U6单词', pe:'跳绳1分钟×3次 + 单脚站立比赛' },
+    { d:10, w:'周三', type:'normal', tag:'每日一练', math:'每日一练 第9天', chinese:'阅读《世界经典神话》30min + 练字5个 + 背诵必背古诗第2首', eng:'朗读三下全册 + 预习四上M4U2 + 抄写三下U1单词', pe:'深蹲12次×2组 + 开合跳25次×3组' },
+    { d:11, w:'周四', type:'uclass', tag:'U学练习', math:'每日一练 第10天', chinese:'阅读《世界经典神话》30min + 练字5个 + 背诵必背古诗第3首', eng:'朗读三上U1-U3复习 + 预习四上M5U1 + U学练习 + 抄写三下U2单词', pe:'平板支撑20秒×2组 + 后踢腿30次×2组' },
+    { d:12, w:'周五', type:'normal', tag:'每日一练', math:'每日一练 第11天', chinese:'阅读《世界经典神话》30min + 练字5个 + 背诵必背古诗第4首 + 作文：《我最喜爱的地方》', eng:'朗读三下U4-U6复习 + 预习四上M5U2 + 抄写三下U3单词', pe:'高抬腿25次×3组 + 靠墙静蹲30秒×2组', extraType:'feature' },
+    { d:13, w:'周六', type:'weekend', tag:'周末', math:'每日一练 第12天（减量）', chinese:'阅读《世界经典神话》30min + 背诵必背古诗第5首', eng:'复习 + 抄写三下U4单词 + 小结M1-5', pe:'户外活动15分钟' },
+    { d:14, w:'周日', type:'weekend', tag:'休息', math:'无作业', chinese:'阅读《世界经典神话》30min + 背诵必背古诗第6首 + 阶段小结', eng:'自由复习 + 抄写三下U5单词', pe:'家务 + 散步10分钟' },
+    { d:15, w:'周一', type:'uclass', tag:'U学练习', math:'每日一练 第13天', chinese:'阅读《世界经典神话》30min + 练字5个 + 背诵四上古诗复习 + 日记第2篇', eng:'抽查复习 + 抄写三下U6单词 + U学练习', pe:'高抬腿30次×3组 + 坐位体前屈15秒×3次' },
+    { d:16, w:'周二', type:'normal', tag:'每日一练', math:'每日一练 第14天', chinese:'阅读《希腊神话故事》30min + 练字5个 + 背诵必背古诗第7首', eng:'全册快速过 + 预习四上M6U1 + 听写三上U1-U3', pe:'跳绳1分钟×3次 + 单脚站立比赛' },
+    { d:17, w:'周三', type:'normal', tag:'每日一练', math:'每日一练 第15天 ✅', chinese:'阅读《希腊神话故事》30min + 练字5个 + 背诵必背古诗第8首', eng:'全册快速过 + 预习四上M6U2 + 听写三上U4-U6', pe:'深蹲12次×2组 + 开合跳25次×3组' },
+    { d:18, w:'周四', type:'uclass', tag:'特色作业', math:'特色作业：数学手抄报', chinese:'阅读《希腊神话故事》30min + 练字5个 + 背诵必背古诗第9首', eng:'复习四上M1-3 + 预习四上M7U1 + U学练习 + 听写三下U1-U3', pe:'平板支撑20秒×2组 + 后踢腿30次×2组', extraType:'feature' },
+    { d:19, w:'周五', type:'normal', tag:'特色作业', math:'特色作业：生活中的数学', chinese:'阅读《希腊神话故事》30min + 练字5个 + 背诵必背古诗第10首 + 作文：《我和谁过一天》', eng:'复习四上M4-5 + 预习四上M7U2 + 听写三下U4-U6', pe:'高抬腿25次×3组 + 靠墙静蹲30秒×2组', extraType:'feature' },
+    { d:20, w:'周六', type:'weekend', tag:'特色作业', math:'特色作业：数学思维题', chinese:'阅读《希腊神话故事》30min + 背诵必背古诗第11首', eng:'复习四上M1-5 + 预习四上M8U1 + 超前熟读M1-3', pe:'户外活动15分钟', extraType:'feature' },
+    { d:21, w:'周日', type:'weekend', tag:'特色作业', math:'特色作业：数学日记', chinese:'阅读《希腊神话故事》30min + 背诵必背古诗第12首 + 阶段小结', eng:'复习四上M6 + 预习四上M8U2 + 超前熟读M4-5', pe:'家务 + 散步10分钟', extraType:'feature' },
+    { d:22, w:'周一', type:'uclass', tag:'特色作业', math:'特色作业：数学小调查 ✅', chinese:'阅读《希腊神话故事》30min + 练字5个 + 背诵必背古诗第13首 + 日记第3篇', eng:'复习四上M7 + 预习四上M9U1 + U学练习 + 超前熟读M6', pe:'高抬腿30次×3组 + 坐位体前屈15秒×3次', extraType:'feature' },
+    { d:23, w:'周二', type:'normal', tag:'预习新知', math:'预习四上数学第1单元', chinese:'阅读《山海经》30min + 练字5个 + 背诵必背古诗第14首', eng:'复习四上M8 + 预习四上M9U2 + 超前熟读M7', pe:'跳绳1分钟×3次 + 单脚站立比赛' },
+    { d:24, w:'周三', type:'normal', tag:'预习新知', math:'预习四上数学第2单元', chinese:'阅读《山海经》30min + 练字5个 + 背诵必背古诗第15首', eng:'复习四上M9 + 预习四上M10U1 + 超前熟读M8', pe:'深蹲12次×2组 + 开合跳25次×3组' },
+    { d:25, w:'周四', type:'uclass', tag:'预习新知', math:'预习四上数学第3单元', chinese:'阅读《山海经》30min + 练字5个 + 背诵必背古诗第16首', eng:'复习四上M10 + 预习四上M10U2 ✅ + U学练习 + 超前熟读M9', pe:'平板支撑20秒×2组 + 后踢腿30次×2组' },
+    { d:26, w:'周五', type:'normal', tag:'预习新知', math:'预习四上数学第4单元 + 家长练习', chinese:'阅读《山海经》30min + 练字5个 + 背诵必背古诗第17首 + 作文：《暑假万花筒》', eng:'复习四上M1-5 + 超前熟读M10 + 听写四上M1-3', pe:'高抬腿25次×3组 + 靠墙静蹲30秒×2组', extraType:'feature' },
+    { d:27, w:'周六', type:'weekend', tag:'预习新知', math:'预习四上数学第5单元 + 家长练习', chinese:'阅读《山海经》30min + 背诵必背古诗第18首', eng:'复习四上M6-10 + 超前熟读全册 + 听写四上M4-6', pe:'户外活动15分钟' },
+    { d:28, w:'周日', type:'weekend', tag:'休息', math:'无作业', chinese:'阅读《山海经》30min + 背诵必背古诗第19首 + 阶段小结', eng:'四上全册快速复习 + 听写四上M7-8', pe:'家务 + 散步10分钟' },
+    { d:29, w:'周一', type:'uclass', tag:'综合复习', math:'综合复习重点错题 + 家长练习', chinese:'阅读《山海经》30min + 练字5个 + 背诵必背古诗第20首 + 日记第4篇', eng:'三上+三下+四上全册快速过 + U学练习 + 听写四上M9-10', pe:'高抬腿30次×3组 + 坐位体前屈15秒×3次' },
+    { d:30, w:'周二', type:'normal', tag:'总结日', math:'总结日：整理作业+预习心得 + 家长练习', chinese:'阅读《山海经》30min + 练字5个 + 古诗文总复习 + 🎉 暑假任务完成！', eng:'三上+三下+四上总复习 + 单词总听写', pe:'自由活动 + 奖励时间 🎁', extraType:'feature' },
+  ];
+
+  const grid = document.getElementById('calendarGrid');
+  const detail = document.getElementById('dayDetail');
+  const progressBar = document.getElementById('progressBar');
+  const completedCount = document.getElementById('completedCount');
+  const progressPercent = document.getElementById('progressPercent');
+
+  // Load saved state
+  let savedState = {};
+  try {
+    savedState = JSON.parse(localStorage.getItem('milaSummerCheckIn') || '{}');
+  } catch(e) {}
+
+  let selectedDay = null;
+
+  function updateProgress() {
+    const done = days.filter(day => savedState[day.d]).length;
+    const pct = Math.round(done / 30 * 100);
+    progressBar.style.width = pct + '%';
+    completedCount.textContent = done;
+    progressPercent.textContent = pct + '%';
+  }
+
+  function renderCalendar() {
+    grid.innerHTML = '';
+    days.forEach(day => {
+      const cell = document.createElement('div');
+      const isDone = !!savedState[day.d];
+      const typeClass = day.extraType || day.type;
+      cell.className = 'calendar-day ' + typeClass + (isDone ? ' done' : '');
+      cell.dataset.day = day.d;
+
+      const tagColor = day.type === 'uclass' ? 'var(--accent3)' :
+                       day.type === 'weekend' ? 'var(--accent2)' :
+                       day.extraType === 'feature' ? 'var(--accent)' : 'var(--muted)';
+
+      cell.innerHTML = `
+        <span class="check-icon">✓</span>
+        <span class="day-num">${day.d}</span>
+        <span class="day-week">${day.w}</span>
+        <span class="day-tag" style="background:${tagColor}15;color:${tagColor};">${day.tag}</span>
+      `;
+
+      cell.addEventListener('click', () => selectDay(day.d));
+      grid.appendChild(cell);
+    });
+  }
+
+  function selectDay(dayNum) {
+    selectedDay = dayNum;
+    document.querySelectorAll('.calendar-day').forEach(c => c.classList.toggle('selected', +c.dataset.day === dayNum));
+
+    const day = days.find(d => d.d === dayNum);
+    if (!day) return;
+
+    const isDone = !!savedState[day.d];
+    const mathDone = !!(savedState[day.d + '_math']);
+    const chineseDone = !!(savedState[day.d + '_chinese']);
+    const engDone = !!(savedState[day.d + '_eng']);
+    const peDone = !!(savedState[day.d + '_pe']);
+
+    detail.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <div>
+          <strong style="font-size:16px;">第 ${day.d} 天 · ${day.w}</strong>
+          <span style="margin-left:8px; padding:2px 8px; border-radius:6px; font-size:12px; font-weight:600; background:${day.type==='uclass'?'var(--blue-bg)':day.type==='weekend'?'var(--green-bg)':day.extraType==='feature'?'var(--warm)':'var(--bg)'}; color:${day.type==='uclass'?'var(--accent3)':day.type==='weekend'?'var(--accent2)':day.extraType==='feature'?'var(--accent)':'var(--muted)'}">${day.tag}</span>
+        </div>
+        <label style="cursor:pointer; font-size:14px; font-weight:600; color:var(--accent2); display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="dayToggle" ${isDone ? 'checked' : ''}>
+          今日全部完成
+        </label>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-card">
+          <h4 style="color:var(--accent);">📐 数学</h4>
+          <label><input type="checkbox" class="sub-check" data-sub="math" ${mathDone || isDone ? 'checked' : ''}> ${day.math}</label>
+        </div>
+        <div class="detail-card">
+          <h4 style="color:#E65100;">📖 语文</h4>
+          <label><input type="checkbox" class="sub-check" data-sub="chinese" ${chineseDone || isDone ? 'checked' : ''}> ${day.chinese}</label>
+        </div>
+        <div class="detail-card">
+          <h4 style="color:var(--accent3);">🔤 英语</h4>
+          <label><input type="checkbox" class="sub-check" data-sub="eng" ${engDone || isDone ? 'checked' : ''}> ${day.eng}</label>
+        </div>
+        <div class="detail-card">
+          <h4 style="color:var(--accent2);">🏃 体育</h4>
+          <label><input type="checkbox" class="sub-check" data-sub="pe" ${peDone || isDone ? 'checked' : ''}> ${day.pe}</label>
+        </div>
+      </div>
+    `;
+
+    // Toggle full day
+    document.getElementById('dayToggle').addEventListener('change', function() {
+      if (this.checked) {
+        savedState[day.d] = true;
+        savedState[day.d + '_math'] = true;
+        savedState[day.d + '_chinese'] = true;
+        savedState[day.d + '_eng'] = true;
+        savedState[day.d + '_pe'] = true;
+      } else {
+        savedState[day.d] = false;
+        savedState[day.d + '_math'] = false;
+        savedState[day.d + '_chinese'] = false;
+        savedState[day.d + '_eng'] = false;
+        savedState[day.d + '_pe'] = false;
+      }
+      save();
+      renderCalendar();
+      selectDay(day.d); // refresh detail
+    });
+
+    // Sub-checks
+    detail.querySelectorAll('.sub-check').forEach(cb => {
+      cb.addEventListener('change', function() {
+        const sub = this.dataset.sub;
+        savedState[day.d + '_' + sub] = this.checked;
+        // If all four checked, mark day done
+        const allChecked = detail.querySelectorAll('.sub-check:checked').length === 4;
+        savedState[day.d] = allChecked;
+        save();
+        renderCalendar();
+      });
+    });
+  }
+
+  function save() {
+    try { localStorage.setItem('milaSummerCheckIn', JSON.stringify(savedState)); } catch(e) {}
+    updateProgress();
+  }
+
+  renderCalendar();
+  updateProgress();
+})();
+</script>
+
+</body>
+</html>

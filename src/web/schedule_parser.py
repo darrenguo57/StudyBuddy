@@ -254,7 +254,11 @@ def plans_to_json(plans: List[DayPlan]) -> str:
 
 if __name__ == '__main__':
     # 测试解析
-    plans = parse_schedule(r'G:\思思学习资料\summer_homework_plan.html')
+    project_root = Path(__file__).resolve().parent.parent.parent
+    schedule_path = project_root / "docs" / "summer_homework_plan.html"
+    if not schedule_path.exists():
+        schedule_path = Path(r'G:\思思学习资料\summer_homework_plan.html')
+    plans = parse_schedule(str(schedule_path))
     for p in plans:
         print(f"第{p.day}天 [{p.day_type}] {p.weekday} - {len(p.tasks)}个任务")
     print(f"\n总计: {len(plans)} 天, {sum(len(p.tasks) for p in plans)} 个任务")

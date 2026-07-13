@@ -76,9 +76,9 @@ def main():
     # ── 启动 Web 服务器 ──
     from web.server import WebServer
 
-    schedule_path = str(PROJECT_ROOT.parent / "思思学习资料" / "summer_homework_plan.html")
+    schedule_path = str(PROJECT_ROOT / "docs" / "summer_homework_plan.html")
     if not Path(schedule_path).exists():
-        # 尝试在工作目录附近查找
+        # 回退：尝试外部目录
         alt = Path(r"G:\思思学习资料\summer_homework_plan.html")
         if alt.exists():
             schedule_path = str(alt)
