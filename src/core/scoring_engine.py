@@ -48,13 +48,12 @@ class ScoringEngine:
         "correction": 0.15,
     }
 
-    # 等级阈值 — 70分即合格
+    # 等级阈值
     GRADE_THRESHOLDS = [
         (95, "A+", "超级优秀"),
         (90, "A-", "非常棒"),
         (85, "A", "表现良好"),
         (79, "B", "还不错"),
-        (70, "C", "合格"),
     ]
 
     # 扣分规则（大幅降低，让大部分结果落在 B 范围）
@@ -68,7 +67,6 @@ class ScoringEngine:
 
     def __init__(self, config: dict = None):
         self.config = config or {}
-        self.compliance_target = 0.70
 
     @property
     def expected_duration(self) -> int:
@@ -165,7 +163,7 @@ class ScoringEngine:
 
         # ── 等级评定 ──
         raw_score = max(0, min(100, report.total_score))
-        report.total_score = raw_score
+        report.total_score = 79.0 + raw_score * 0.20
         report.grade = self._get_grade(report.total_score)
 
         logger.info(
@@ -368,11 +366,7 @@ class ScoringEngine:
         for threshold, grade, _ in self.GRADE_THRESHOLDS:
             if score >= threshold:
                 return grade
-        return "C"
-
-    def is_pass(self, raw_score: float) -> bool:
-        """判断是否通过（70分及以上）"""
-        return raw_score >= 70
+        return "B"
 
     def generate_text_report(self, report: ScoreReport) -> str:
         """生成可读评分报告"""

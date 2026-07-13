@@ -1016,10 +1016,10 @@ class MainWindow(QMainWindow):
             corrected=self._correction_count,
         )
 
-        # 实时合规率显示
+        # 实时相似度显示
         if hasattr(self, 'detector') and self.detector is not None:
-            ratio = self.detector.get_compliance_ratio()
-            self.status_panel.set_compliance_info(f"合规率 {ratio*100:.0f}%")
+            avg_sim = self.detector.get_average_similarity()
+            self.status_panel.set_compliance_info(f"相似度 {avg_sim*100:.0f}%")
 
     def _simulate_posture_update(self):
         """（已废弃：真实检测已接入 _update_posture_status）"""
@@ -1262,22 +1262,34 @@ class MainWindow(QMainWindow):
 
     # ── 手机端远程录制控制 ──
 
+    def _get_server_base_url(self):
+        """获取服务端基础URL，根据certs目录是否存在自动判断HTTP/HTTPS"""
+        from pathlib import Path
+        cert_path = Path(__file__).resolve().parent.parent.parent / "certs" / "cert.pem"
+        if cert_path.exists():
+            return "https://localhost:8910"
+        return "http://localhost:8910"
+
     def _notify_mobile_start(self):
-        """通知手机端开始录制（HTTPS → WebServer → WebSocket Broadcast）"""
+        """通知手机端开始录制（WebServer → WebSocket Broadcast）"""
         try:
-            # 跳过自签证书验证
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
+            base_url = self._get_server_base_url()
+            is_https = base_url.startswith("https")
+
+            ctx = None
+            if is_https:
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
 
             body = json.dumps({"session_id": self._session_id}).encode("utf-8")
             req = urllib.request.Request(
-                "https://localhost:8910/api/mobile/start",
+                f"{base_url}/api/mobile/start",
                 data=body,
                 method="POST",
                 headers={"Content-Type": "application/json"},
             )
-            resp = urllib.request.urlopen(req, timeout=5, context=ctx)
+            resp = urllib.request.urlopen(req, timeout=5, context=ctx) if ctx else urllib.request.urlopen(req, timeout=5)
             result = json.loads(resp.read().decode())
             if result.get("success"):
                 logger.info(f"手机端录制已通知启动: {result.get('path')}")
@@ -1290,16 +1302,21 @@ class MainWindow(QMainWindow):
         """通知手机端停止录制，返回手机端视频路径（可能为空）"""
         mobile_path = ""
         try:
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
+            base_url = self._get_server_base_url()
+            is_https = base_url.startswith("https")
+
+            ctx = None
+            if is_https:
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
 
             req = urllib.request.Request(
-                "https://localhost:8910/api/mobile/stop",
+                f"{base_url}/api/mobile/stop",
                 method="POST",
                 headers={"Content-Type": "application/json"},
             )
-            resp = urllib.request.urlopen(req, timeout=30, context=ctx)
+            resp = urllib.request.urlopen(req, timeout=30, context=ctx) if ctx else urllib.request.urlopen(req, timeout=30)
             result = json.loads(resp.read().decode())
             if result.get("success"):
                 mobile_path = result.get("path", "")
@@ -1320,14 +1337,20 @@ class MainWindow(QMainWindow):
     def _check_mobile_posture_alert(self):
         """轮询服务器获取手机端姿态提醒"""
         try:
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
+            base_url = self._get_server_base_url()
+            is_https = base_url.startswith("https")
+
+            ctx = None
+            if is_https:
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+
             req = urllib.request.Request(
-                "https://localhost:8910/api/mobile/posture_alert",
+                f"{base_url}/api/mobile/posture_alert",
                 method="GET",
             )
-            resp = urllib.request.urlopen(req, timeout=3, context=ctx)
+            resp = urllib.request.urlopen(req, timeout=3, context=ctx) if ctx else urllib.request.urlopen(req, timeout=3)
             result = json.loads(resp.read().decode())
             if result.get("type") == "posture_alert" and result.get("alert") == "head_too_low":
                 self.voice.remind_violation("head_too_low")

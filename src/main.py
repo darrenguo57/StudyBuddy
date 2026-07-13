@@ -43,6 +43,32 @@ for ffmpeg_logger in ["FFmpeg", "avcodec", "avformat", "swscale", "qt.multimedia
 logger = logging.getLogger("studybuddy")
 
 
+def _ensure_audio_files():
+    """确保音频文件存在，不存在则自动生成"""
+    audio_dir = Path(__file__).resolve().parent.parent / "assets" / "audio"
+
+    # 检查关键文件
+    required = ["intro.wav", "start.wav", "camera_lost.wav"]
+    missing = [f for f in required if not (audio_dir / f).exists()]
+
+    if missing:
+        logger.info(f"音频文件缺失 {len(missing)} 个，正在自动生成...")
+        try:
+            import subprocess
+            script = Path(__file__).resolve().parent.parent / "scripts" / "generate_audio.py"
+            result = subprocess.run(
+                [sys.executable, str(script)],
+                capture_output=True, text=True, timeout=120,
+                cwd=str(audio_dir.parent.parent)
+            )
+            if result.returncode != 0:
+                logger.warning(f"音频生成脚本返回非零: {result.stderr[:500]}")
+            else:
+                logger.info("音频文件自动生成完成")
+        except Exception as e:
+            logger.warning(f"音频自动生成失败: {e}")
+
+
 def get_lan_ip() -> str:
     """获取本机局域网 IP"""
     try:
@@ -73,15 +99,28 @@ def main():
 
     _th.Thread(target=_preload_ai, daemon=True, name="ai-preload").start()
 
+    # ── 确保音频文件存在 ──
+    _ensure_audio_files()
+
     # ── 启动 Web 服务器 ──
     from web.server import WebServer
 
-    schedule_path = str(PROJECT_ROOT / "docs" / "summer_homework_plan.html")
-    if not Path(schedule_path).exists():
-        # 回退：尝试外部目录
-        alt = Path(r"G:\思思学习资料\summer_homework_plan.html")
-        if alt.exists():
-            schedule_path = str(alt)
+    # 排程文件路径：多路径搜索
+    schedule_candidates = [
+        PROJECT_ROOT / "data" / "summer_homework_plan.html",                # 优先项目内 data/
+        PROJECT_ROOT / "docs" / "summer_homework_plan.html",                # 项目内 docs/
+        PROJECT_ROOT.parent / "思思学习资料" / "summer_homework_plan.html",  # 原路径
+        Path(r"G:\思思学习资料\summer_homework_plan.html"),                 # G盘硬编码
+    ]
+    schedule_path = ""
+    for candidate in schedule_candidates:
+        if candidate.exists():
+            schedule_path = str(candidate)
+            logger.info(f"找到排程文件: {schedule_path}")
+            break
+
+    if not schedule_path:
+        logger.warning("未在任何位置找到排程文件，将跳过排程加载")
 
     web_server = WebServer(
         host="0.0.0.0",
@@ -90,7 +129,8 @@ def main():
     )
     web_server.start_async()
     lan_ip = get_lan_ip()
-    logger.info(f"手机端访问: http://{lan_ip}:8910")
+    protocol = "https" if (PROJECT_ROOT / "certs" / "cert.pem").exists() else "http"
+    logger.info(f"手机端访问: {protocol}://{lan_ip}:8910")
 
     # ── 初始化数据库：加载作业排程到 SQLite ──
     from core.database import Database

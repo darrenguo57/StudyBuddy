@@ -13,9 +13,9 @@ from typing import Optional, Dict
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, UploadFile, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -29,6 +29,14 @@ class TutorRequest(BaseModel):
 class HomeworkToggleRequest(BaseModel):
     day_number: int
     task_index: int
+
+# 手机端基准坐姿（待用户提供手机端基准照片后校准）
+# 当前为临时值，后续根据手机端照片精确设定
+MOBILE_BASELINE = {
+    'head_y_ratio': 0.45,        # 鼻尖在画面中的y比例（临时值）
+    'head_shoulder_gap': 0.15,   # 鼻子与肩膀的y距离比例（临时值）
+    'tolerance': 0.30,
+}
 
 # 项目根目录
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -110,9 +118,21 @@ class WebServer:
                 return HTMLResponse(index_path.read_text(encoding="utf-8"))
             return HTMLResponse("<h1>StudyBuddy Mobile</h1><p>页面加载中...</p>")
 
+        @app.get("/certs/cert.pem")
+        async def download_cert():
+            """手机端下载SSL证书（用于信任自签名证书）"""
+            cert_path = PROJECT_ROOT / "certs" / "cert.pem"
+            if not cert_path.exists():
+                raise HTTPException(status_code=404, detail="证书不存在")
+            return FileResponse(str(cert_path), media_type="application/x-pem-file", filename="StudyBuddy.crt")
+
         @app.get("/api/health")
         async def health():
             return {"status": "ok", "timestamp": time.time()}
+
+        @app.get("/api/ping")
+        async def ping():
+            return {"ok": True, "timestamp": time.time()}
 
         @app.get("/api/schedule")
         async def get_schedule():
@@ -411,44 +431,108 @@ class WebServer:
         """确保排程已加载"""
         if self._schedule_loaded:
             return
-        if self.schedule_html_path:
-            try:
-                from .schedule_parser import parse_schedule
-                import json as _json
-                from dataclasses import asdict
+        if not self.schedule_html_path:
+            logger.info("未配置排程文件路径，跳过排程加载")
+            self._schedule_loaded = True
+            return
+        try:
+            from .schedule_parser import parse_schedule
+            import json as _json
+            from dataclasses import asdict
 
-                plans = parse_schedule(self.schedule_html_path)
-                self.schedule_data = [
-                    {
-                        "day": p.day,
-                        "weekday": p.weekday,
-                        "phase": p.phase,
-                        "day_type": p.day_type,
-                        "tasks": [asdict(t) for t in p.tasks],
-                    }
-                    for p in plans
-                ]
-                self._schedule_loaded = True
-                logger.info(f"排程已加载: {len(self.schedule_data)} 天")
-            except Exception as e:
-                logger.error(f"加载排程失败: {e}")
+            plans = parse_schedule(self.schedule_html_path)
+            self.schedule_data = [
+                {
+                    "day": p.day,
+                    "weekday": p.weekday,
+                    "phase": p.phase,
+                    "day_type": p.day_type,
+                    "tasks": [asdict(t) for t in p.tasks],
+                }
+                for p in plans
+            ]
+            self._schedule_loaded = True
+            logger.info(f"排程已加载: {len(self.schedule_data)} 天")
+        except Exception as e:
+            logger.error(f"加载排程失败: {e}")
+            self._schedule_loaded = True
+
+    def _ensure_certs(self):
+        """确保 SSL 证书存在，不存在则自动生成"""
+        import socket
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        import datetime
+
+        cert_dir = PROJECT_ROOT / "certs"
+        cert_path = cert_dir / "cert.pem"
+        key_path = cert_dir / "key.pem"
+
+        if cert_path.exists() and key_path.exists():
+            return str(cert_path), str(key_path)
+
+        logger.info("SSL证书缺失，正在自动生成...")
+        cert_dir.mkdir(parents=True, exist_ok=True)
+
+        # 获取本机局域网IP
+        lan_ip = "192.168.1.1"
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            lan_ip = s.getsockname()[0]
+            s.close()
+        except Exception:
+            pass
+
+        hostname = socket.gethostname()
+
+        # 生成密钥
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+        # 构建证书
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, f"StudyBuddy-{hostname}"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "StudyBuddy"),
+        ])
+
+        san = x509.SubjectAlternativeName([
+            x509.DNSName("localhost"),
+            x509.IPAddress(x509.IPv4Address(lan_ip)),
+        ])
+
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.datetime.utcnow())
+            .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=3650))
+            .add_extension(san, critical=False)
+            .sign(key, hashes.SHA256())
+        )
+
+        with open(key_path, "wb") as f:
+            f.write(key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption(),
+            ))
+
+        with open(cert_path, "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+        logger.info(f"SSL证书已生成: {cert_path} (IP: {lan_ip}, 有效期10年)")
+        return str(cert_path), str(key_path)
 
     def start_async(self):
         """在后台线程启动 uvicorn 服务器"""
         import uvicorn
 
         def run_server():
-            # HTTPS 证书路径
-            cert_dir = PROJECT_ROOT / "certs"
-            ssl_certfile = str(cert_dir / "cert.pem")
-            ssl_keyfile = str(cert_dir / "key.pem")
-
-            ssl_kwargs = {}
-            if cert_dir.exists() and (cert_dir / "cert.pem").exists():
-                ssl_kwargs = {
-                    "ssl_certfile": ssl_certfile,
-                    "ssl_keyfile": ssl_keyfile,
-                }
+            cert_path, key_path = self._ensure_certs()
 
             uvicorn.run(
                 self.app,
@@ -456,7 +540,8 @@ class WebServer:
                 port=self.port,
                 log_level="warning",
                 access_log=False,
-                **ssl_kwargs,
+                ssl_certfile=cert_path,
+                ssl_keyfile=key_path,
             )
 
         thread = threading.Thread(target=run_server, daemon=True, name="web-server")
@@ -464,6 +549,19 @@ class WebServer:
 
         protocol = "https" if (PROJECT_ROOT / "certs" / "cert.pem").exists() else "http"
         logger.info(f"Web 服务器已启动: {protocol}://{self.host}:{self.port}")
+
+        if protocol == "https":
+            import socket as _sock
+            lan_ip = "192.168.1.1"
+            try:
+                s = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                lan_ip = s.getsockname()[0]
+                s.close()
+            except Exception:
+                pass
+            logger.info(f"手机端访问: https://{lan_ip}:{self.port}")
+            logger.info(f"如手机提示不安全，请在手机浏览器打开 https://{lan_ip}:{self.port}/certs/cert.pem 下载证书并安装")
 
     async def broadcast(self, message: dict):
         """向所有手机端推送消息"""

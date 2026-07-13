@@ -41,19 +41,29 @@ class PostureResult:
     head_tilt_angle: float = 0.0
     body_tilt_angle: float = 0.0
     nose_z: float = 0.0
+    similarity: float = 1.0  # 与基准坐姿的相似度 (0.0~1.0)
     landmarks = None
 
 
 class PostureDetector:
     """坐姿检测器 - 增强版"""
 
-    # 基准校准阈值（对应用户提供的正确坐姿照片）
-    # 照片特征：头部前倾较重、靠近桌面，以此作为"合格"基准
-    CALIBRATED_THRESHOLDS = {
-        'head_forward': 45,       # 原25°→放宽到45°（照片中头部前倾约35-40°）
-        'head_tilt': 20,          # 原12°→放宽到20°
-        'body_tilt': 18,          # 原10°→放宽到18°
-        'too_close_z': -0.03,     # 原-0.12→放宽到-0.03（允许更靠近桌面）
+    # 基准坐姿画像（对应用户提供的两张标准坐姿照片）
+    # 这些值代表了"正确坐姿"的参考特征，实时检测时计算与基准的相似度
+    BASELINE_POSTURE = {
+        'head_forward_angle': 38.0,    # 基准头部前倾角（度）
+        'head_tilt_angle': 5.0,        # 基准头部歪斜角
+        'body_tilt_angle': 8.0,        # 基准身体倾斜角
+        'nose_z': -0.08,               # 基准距离（归一化z）
+        'tolerance': 0.30,             # 容差：30%（即允许偏离基准30%，相当于70%相似度即通过）
+    }
+
+    # 各指标最大允许偏差（对应 tolerance=0.30 时的边界）
+    MAX_DEVIATIONS = {
+        'head_forward_angle': 15.0,   # 38±15 → 23-53°范围
+        'head_tilt_angle': 8.0,
+        'body_tilt_angle': 10.0,
+        'nose_z': 0.06,               # -0.08±0.06 → -0.14 到 -0.02
     }
 
     # MediaPipe 关键点索引
@@ -104,36 +114,28 @@ class PostureDetector:
         }
         self._buffer_size = 5
 
-        # 基准校准模式（默认启用）
-        self._calibrated = True
-        self._compliance_target = 0.70
-        self._compliance_history: List[bool] = []
-        self._compliance_history_size = 50  # 最近50帧
+        # 基准校准模式（默认启用：与基准照片对比计算相似度）
+        self._baseline_mode = True
+        self._similarity_target = 0.70  # 70%相似度即为合格
+        self._similarity_history: List[float] = []
+        self._similarity_history_size = 50  # 最近50帧
 
     # ── 配置参数 ──
 
     @property
     def head_forward_threshold(self) -> float:
-        if self._calibrated:
-            return self.CALIBRATED_THRESHOLDS.get("head_forward", 45)
         return self.config.get("head_forward_angle", 25)
 
     @property
     def head_tilt_threshold(self) -> float:
-        if self._calibrated:
-            return self.CALIBRATED_THRESHOLDS.get("head_tilt", 20)
         return self.config.get("head_tilt_angle", 12)
 
     @property
     def body_tilt_threshold(self) -> float:
-        if self._calibrated:
-            return self.CALIBRATED_THRESHOLDS.get("body_tilt", 18)
         return self.config.get("body_tilt_angle", 10)
 
     @property
     def too_close_z(self) -> float:
-        if self._calibrated:
-            return self.CALIBRATED_THRESHOLDS.get("too_close_z", -0.03)
         return self.config.get("too_close_z", -0.12)
 
     @property
@@ -197,7 +199,7 @@ class PostureDetector:
         self.missing_frame_count = 0
         for key in self._angle_buffer:
             self._angle_buffer[key].clear()
-        self._compliance_history.clear()
+        self._similarity_history.clear()
 
     def draw_landmarks(self, frame: np.ndarray, landmarks) -> np.ndarray:
         self.mp_draw.draw_landmarks(
@@ -247,15 +249,6 @@ class PostureDetector:
         )
         result.head_forward_angle = self._smooth_value("head_forward", result.head_forward_angle)
 
-        if result.head_forward_angle > self.head_forward_threshold:
-            result.violations.append(PostureViolation(
-                timestamp=time.time(),
-                violation_type="head_forward",
-                severity="critical",
-                angle=result.head_forward_angle,
-                confidence=min(result.head_forward_angle / self.head_forward_threshold, 1.5) / 1.5,
-            ))
-
         # ── 2. 头部歪斜（两耳连线与水平夹角）──
         result.head_tilt_angle = abs(
             math.degrees(math.atan2(
@@ -264,14 +257,6 @@ class PostureDetector:
             ))
         )
         result.head_tilt_angle = self._smooth_value("head_tilt", result.head_tilt_angle)
-
-        if result.head_tilt_angle > self.head_tilt_threshold:
-            result.violations.append(PostureViolation(
-                timestamp=time.time(),
-                violation_type="head_tilt",
-                severity="warning",
-                angle=result.head_tilt_angle,
-            ))
 
         # ── 3. 身体倾斜（两肩连线与水平夹角）──
         result.body_tilt_angle = abs(
@@ -282,54 +267,76 @@ class PostureDetector:
         )
         result.body_tilt_angle = self._smooth_value("body_tilt", result.body_tilt_angle)
 
-        if result.body_tilt_angle > self.body_tilt_threshold:
-            result.violations.append(PostureViolation(
-                timestamp=time.time(),
-                violation_type="body_tilt",
-                severity="warning",
-                angle=result.body_tilt_angle,
-            ))
-
-        # ── 4. 距离过近（鼻子 z 轴深度）──
-        # MediaPipe z 值：正值表示在摄像头前方（靠近），负值表示远离
-        # 实际使用中，z 值范围约 [-0.5, 0.5]，越接近摄像头 z 越大
+        # ── 4. 距离（鼻子 z 轴深度）──
         result.nose_z = nose.z
-        smoothed_z = self._smooth_value("nose_z", nose.z)
+        result.nose_z = self._smooth_value("nose_z", nose.z)
 
-        # 修正：z > threshold 表示距离过近（z 越大越靠近摄像头）
-        if smoothed_z > abs(self.too_close_z):
+        # ── 基准相似度计算 ──
+        # 对各指标计算与基准的偏差 → 归一化偏差率 → 相似度 → 加权平均
+        similarities = {}
+
+        # 头部前倾相似度
+        hf_dev = abs(result.head_forward_angle - self.BASELINE_POSTURE['head_forward_angle'])
+        hf_ratio = hf_dev / self.MAX_DEVIATIONS['head_forward_angle']
+        similarities['head_forward'] = max(0.0, 1.0 - hf_ratio)
+
+        # 头部歪斜相似度
+        ht_dev = abs(result.head_tilt_angle - self.BASELINE_POSTURE['head_tilt_angle'])
+        ht_ratio = ht_dev / self.MAX_DEVIATIONS['head_tilt_angle']
+        similarities['head_tilt'] = max(0.0, 1.0 - ht_ratio)
+
+        # 身体倾斜相似度
+        bt_dev = abs(result.body_tilt_angle - self.BASELINE_POSTURE['body_tilt_angle'])
+        bt_ratio = bt_dev / self.MAX_DEVIATIONS['body_tilt_angle']
+        similarities['body_tilt'] = max(0.0, 1.0 - bt_ratio)
+
+        # 距离相似度
+        nz_dev = abs(result.nose_z - self.BASELINE_POSTURE['nose_z'])
+        nz_ratio = nz_dev / self.MAX_DEVIATIONS['nose_z']
+        similarities['nose_z'] = max(0.0, 1.0 - nz_ratio)
+
+        # 总体相似度（四指标加权平均）
+        overall_similarity = sum(similarities.values()) / len(similarities)
+        result.similarity = overall_similarity
+
+        # ── 基于相似度的违规判定 ──
+        if overall_similarity < 0.60:
+            severity = "critical" if overall_similarity < 0.40 else "warning"
+
+            # 为偏离最严重的指标生成违规
+            worst_metric = min(similarities, key=similarities.get)
+            worst_sim = similarities[worst_metric]
+
+            metric_map = {
+                'head_forward': ('head_forward', result.head_forward_angle),
+                'head_tilt': ('head_tilt', result.head_tilt_angle),
+                'body_tilt': ('body_tilt', result.body_tilt_angle),
+                'nose_z': ('too_close', result.nose_z),
+            }
+            vtype, angle = metric_map.get(worst_metric, ('unknown', 0.0))
+
             result.violations.append(PostureViolation(
                 timestamp=time.time(),
-                violation_type="too_close",
-                severity="critical",
-                confidence=min(smoothed_z / abs(self.too_close_z), 2.0) / 2.0,
+                violation_type=vtype,
+                severity=severity,
+                angle=angle,
+                confidence=1.0 - worst_sim,
             ))
 
-        # ── 5. 趴桌检测（综合指标）──
-        # 趴桌特征：
-        #   a) 鼻子 y 明显低于肩中点 y（头低得很厉害）
-        #   b) 耳中点 y 也低于肩中点 y
-        #   c) 肩中点到髋中点的角度异常（身体前倾）
-        nose_below_shoulder = nose.y > shoulder_mid.y + 0.05  # 鼻子低于肩中点 + 阈值
-        ear_below_shoulder = ear_mid.y > shoulder_mid.y
-        torso_angle = self._angle_between(
-            (hip_mid.x, hip_mid.y, hip_mid.z),
-            (shoulder_mid.x, shoulder_mid.y, shoulder_mid.z),
-        )
-        # 正常坐姿 torso_angle 接近 0（肩在髋正上方）
-        # 趴桌时 torso_angle 变大（肩向前倾）
-        torso_leaning = torso_angle > 15
+            # 如果多个指标也明显偏离，追加违规
+            for metric, sim in similarities.items():
+                if sim < 0.40 and metric != worst_metric:
+                    vtype2, angle2 = metric_map.get(metric, ('unknown', 0.0))
+                    result.violations.append(PostureViolation(
+                        timestamp=time.time(),
+                        violation_type=vtype2,
+                        severity=severity,
+                        angle=angle2,
+                        confidence=1.0 - sim,
+                    ))
 
-        # 趴桌判定：鼻子低 + (耳朵低 或 身体前倾)
-        if nose_below_shoulder and (ear_below_shoulder or torso_leaning):
-            result.violations.append(PostureViolation(
-                timestamp=time.time(),
-                violation_type="lying_down",
-                severity="critical",
-            ))
-
-        result.compliance = len(result.violations) == 0
-        self._track_compliance(result.compliance)
+        result.compliance = overall_similarity >= 0.60
+        self._track_similarity(overall_similarity)
         return result
 
     def _update_state(self, posture: PostureResult):
@@ -388,25 +395,31 @@ class PostureDetector:
             return 0.0
         return math.degrees(math.atan2(horizontal_dist, vertical_dist))
 
-    def _track_compliance(self, is_compliant: bool):
-        """记录每帧合规状态"""
-        self._compliance_history.append(is_compliant)
-        if len(self._compliance_history) > self._compliance_history_size:
-            self._compliance_history.pop(0)
+    def _track_similarity(self, similarity: float):
+        """记录每帧与基准的相似度"""
+        self._similarity_history.append(similarity)
+        if len(self._similarity_history) > self._similarity_history_size:
+            self._similarity_history.pop(0)
 
-    def get_compliance_ratio(self) -> float:
-        """返回最近N帧中合规帧的比例（0.0~1.0）"""
-        if not self._compliance_history:
+    def get_average_similarity(self) -> float:
+        """返回最近N帧的平均相似度（0.0~1.0）"""
+        if not self._similarity_history:
             return 1.0
-        return sum(self._compliance_history) / len(self._compliance_history)
+        return sum(self._similarity_history) / len(self._similarity_history)
+
+    def get_baseline_similarity(self) -> float:
+        """返回最近一帧的相似度，若无历史则返回1.0"""
+        if not self._similarity_history:
+            return 1.0
+        return self._similarity_history[-1]
 
     @property
-    def is_calibrated(self) -> bool:
-        return self._calibrated
+    def is_baseline_mode(self) -> bool:
+        return self._baseline_mode
 
-    def set_calibrated_mode(self, enabled: bool):
-        """启用/禁用基准校准模式"""
-        self._calibrated = enabled
+    def set_baseline_mode(self, enabled: bool):
+        """启用/禁用基准相似度模式"""
+        self._baseline_mode = enabled
 
     def release(self):
         if hasattr(self, 'pose'):
