@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>StudyBuddy · 学习助手</title>
+<style>
+:root {
+  --bg: #0A0A0A;
+  --surface: #141414;
+  --ink: #E5E5E5;
+  --muted: #888888;
+  --accent: #E8753A;
+  --accent2: #34C759;
+  --accent3: #FF3B30;
+}
+* { box-sizing:border-box;margin:0;padding:0; }
+body {
+  font-family: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  background: var(--bg); color: var(--ink);
+  font-size: 14px; line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Status bar */
+.status-bar {
+  position: absolute; top: 0; left: 0; right: 0;
+  padding: 8px 12px; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(rgba(0,0,0,.6), transparent);
+}
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--muted);
+}
+.status-dot.connected { background: var(--accent2); animation: pulse 2s infinite; }
+.status-dot.recording { background: var(--accent3); animation: pulse .8s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.status-text { font-size: 12px; color: rgba(255,255,255,.7); }
+
+/* Camera area */
+.camera-area {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: #000;
+  display: flex; align-items: center; justify-content: center;
+}
+.camera-area video {
+  width: 100%; height: 100%; object-fit: cover;
+  display: block;
+}
+
+/* Recording indicator */
+.rec-indicator {
+  position: absolute; top: 12px; right: 12px;
+  display: none; align-items: center; gap: 6px;
+  background: rgba(0,0,0,.5); padding: 4px 10px;
+  border-radius: 20px; z-index: 10;
+}
+.rec-indicator.active { display: flex; }
+.rec-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent3);
+  animation: pulse .8s infinite;
+}
+.rec-time { font-size: 12px; color: #fff; }
+
+/* Overlay messages */
+.overlay-msg {
+  position: absolute; bottom: 80px; left: 0; right: 0;
+  text-align: center; z-index: 10; display: none;
+}
+.overlay-msg.show { display: block; }
+.overlay-msg span {
+  display: inline-block; background: rgba(0,0,0,.7);
+  color: #fff; padding: 8px 20px; border-radius: 20px;
+  font-size: 14px;
+}
+
+/* Small schedule preview at bottom */
+.schedule-preview {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(20,20,20,.9); z-index: 10;
+  padding: 8px 12px;
+  font-size: 12px; color: var(--muted);
+  max-height: 60px; overflow: hidden;
+  border-top: 1px solid rgba(255,255,255,.1);
+}
+.schedule-preview .day-label {
+  color: var(--accent); font-weight: 600; margin-bottom: 2px;
+}
+</style>
+</head>
+<body>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <span class="status-text" id="statusText">等待连接...</span>
+  <span class="status-dot" id="statusDot"></span>
+</div>
+
+<!-- Camera area -->
+<div class="camera-area" id="cameraArea">
+  <video id="cameraVideo" autoplay playsinline muted></video>
+
+  <!-- Recording indicator -->
+  <div class="rec-indicator" id="recIndicator">
+    <span class="rec-dot"></span>
+    <span class="rec-time" id="recTime">00:00</span>
+  </div>
+
+  <!-- Overlay messages -->
+  <div class="overlay-msg" id="overlayMsg"><span></span></div>
+</div>
+
+<!-- Schedule preview at bottom -->
+<div class="schedule-preview" id="schedulePreview" style="display:none">
+  <div class="day-label" id="dayLabel"></div>
+  <div id="taskSummary"></div>
+</div>
+
+<script>
+// ========== 状态管理 ==========
+const STATE = {
+  serverUrl: window.location.origin,
+  ws: null,
+  connected: false,
+  streaming: false,
+  cameraStream: null,
+  mediaRecorder: null,
+  recordedChunks: [],
+  recStartTime: 0,
+  recTimerInterval: null,
+};
+
+// ========== 初始化 ==========
+document.addEventListener('DOMContentLoaded', () => {
+  connectWS();
+  fetchSchedulePreview();
+});
+
+// ========== WebSocket ==========
+function connectWS() {
+  const wsUrl = STATE.serverUrl.replace('http', 'ws') + '/ws/mobile';
+  STATE.ws = new WebSocket(wsUrl);
+
+  STATE.ws.onopen = () => {
+    STATE.connected = true;
+    document.getElementById('statusDot').classList.add('connected');
+    document.getElementById('statusText').textContent = '已连接';
+  };
+
+  STATE.ws.onclose = () => {
+    STATE.connected = false;
+    document.getElementById('statusDot').classList.remove('connected', 'recording');
+    document.getElementById('statusText').textContent = '连接断开，重连中...';
+    stopStreaming(); // 清理摄像头
+    setTimeout(connectWS, 3000);
+  };
+
+  STATE.ws.onmessage = async (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      switch (msg.type) {
+        case 'pong':
+          break;
+        case 'start_streaming':
+          await startStreaming();
+          break;
+        case 'stop_streaming':
+          await stopStreamingAndUpload();
+          break;
+      }
+    } catch(err) {}
+  };
+}
+
+// ========== 获取排程预览 ==========
+async function fetchSchedulePreview() {
+  try {
+    const res = await fetch('/api/schedule');
+    const data = await res.json();
+    if (data.plans && data.plans.length > 0) {
+      const today = data.plans[0]; // 简单取第一天
+      const preview = document.getElementById('schedulePreview');
+      document.getElementById('dayLabel').textContent =
+        `第 ${today.day} 天 · ${today.weekday || ''}`;
+      const tasks = (today.tasks || []).slice(0, 3);
+      document.getElementById('taskSummary').textContent =
+        tasks.map(t => t.description).join(' · ') +
+        (today.tasks && today.tasks.length > 3 ? ' ...' : '');
+      preview.style.display = 'block';
+    }
+  } catch(e) {}
+}
+
+// ========== 摄像头 + 录制 ==========
+async function startStreaming() {
+  if (STATE.streaming) return;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 480 },
+        height: { ideal: 640 },
+        zoom: { ideal: 1.0 },
+        advanced: [
+          { zoom: 1.0 }
+        ]
+      },
+      audio: true
+    });
+
+    STATE.cameraStream = stream;
+    const video = document.getElementById('cameraVideo');
+    video.srcObject = stream;
+
+    // 启动录制
+    STATE.recordedChunks = [];
+    STATE.recStartTime = Date.now();
+
+    // 检查支持的 MIME 类型
+    let mimeType = 'video/webm;codecs=vp8,opus';
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+      mimeType = 'video/webm;codecs=vp8';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'video/mp4';
+        }
+      }
+    }
+
+    STATE.mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+    STATE.mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        STATE.recordedChunks.push(e.data);
+      }
+    };
+    STATE.mediaRecorder.start(1000); // 每秒收集数据
+
+    STATE.streaming = true;
+    document.getElementById('statusDot').classList.add('recording');
+    document.getElementById('statusText').textContent = '录制中';
+    document.getElementById('recIndicator').classList.add('active');
+
+    // 录制计时
+    STATE.recTimerInterval = setInterval(updateRecTime, 1000);
+
+    showOverlay('录制已开始');
+  } catch(e) {
+    showOverlay('摄像头启动失败: ' + e.message);
+    // 通知服务器启动失败
+    if (STATE.ws && STATE.ws.readyState === WebSocket.OPEN) {
+      STATE.ws.send(JSON.stringify({ type: 'stream_error', error: e.message }));
+    }
+  }
+}
+
+async function stopStreamingAndUpload() {
+  if (!STATE.streaming) return;
+
+  STATE.streaming = false;
+  clearInterval(STATE.recTimerInterval);
+
+  document.getElementById('statusDot').classList.remove('recording');
+  document.getElementById('statusText').textContent = '上传视频...';
+  document.getElementById('recIndicator').classList.remove('active');
+
+  return new Promise((resolve) => {
+    STATE.mediaRecorder.onstop = async () => {
+      // 停止摄像头
+      if (STATE.cameraStream) {
+        STATE.cameraStream.getTracks().forEach(t => t.stop());
+        STATE.cameraStream = null;
+      }
+      document.getElementById('cameraVideo').srcObject = null;
+
+      // 上传视频
+      if (STATE.recordedChunks.length > 0) {
+        const blob = new Blob(STATE.recordedChunks, { type: STATE.mediaRecorder.mimeType });
+        await uploadVideo(blob);
+      }
+
+      document.getElementById('statusText').textContent = '已连接';
+      resolve();
+    };
+
+    STATE.mediaRecorder.stop();
+  });
+}
+
+function stopStreaming() {
+  // 异常断开时的清理（不上传）
+  STATE.streaming = false;
+  clearInterval(STATE.recTimerInterval);
+  try { STATE.mediaRecorder?.stop(); } catch(e) {}
+  if (STATE.cameraStream) {
+    STATE.cameraStream.getTracks().forEach(t => t.stop());
+    STATE.cameraStream = null;
+  }
+  document.getElementById('cameraVideo').srcObject = null;
+  document.getElementById('recIndicator').classList.remove('active');
+}
+
+async function uploadVideo(blob) {
+  const formData = new FormData();
+  const ext = STATE.mediaRecorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
+  formData.append('video', blob, `mobile_recording.${ext}`);
+
+  try {
+    const res = await fetch('/api/upload_mobile_video', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (data.success) {
+      showOverlay('视频已上传');
+    } else {
+      showOverlay('上传失败: ' + (data.error || '未知'));
+    }
+  } catch(e) {
+    showOverlay('上传失败: ' + e.message);
+  }
+}
+
+function updateRecTime() {
+  const elapsed = Math.floor((Date.now() - STATE.recStartTime) / 1000);
+  const m = Math.floor(elapsed / 60);
+  const s = elapsed % 60;
+  document.getElementById('recTime').textContent =
+    `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function showOverlay(msg) {
+  const el = document.getElementById('overlayMsg');
+  el.querySelector('span').textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// 定期 ping
+setInterval(() => {
+  if (STATE.ws && STATE.ws.readyState === WebSocket.OPEN) {
+    STATE.ws.send(JSON.stringify({ type: 'ping' }));
+  }
+}, 30000);
+</script>
+</body>
+</html>

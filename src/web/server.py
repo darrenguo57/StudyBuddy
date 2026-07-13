@@ -75,6 +75,15 @@ class WebServer:
 
         # 视频帧接收回调（由 CameraManager 处理）
         self.on_mobile_frame = None
+
+        # 手机端坐姿检测（头部高度分析）
+        self._mp_pose = None  # 懒加载
+        self._mobile_pose_frame_count = 0
+        self._mobile_pose_skip = 10  # 每10帧检测一次
+        self._last_mobile_alert_time = 0
+        self._mobile_alert_cooldown = 8  # 秒
+        self._mobile_posture_alert = None  # 供外部读取的提醒
+
         self._setup_routes()
 
     def _setup_routes(self):
@@ -308,6 +317,13 @@ class WebServer:
                 "path": str(self._mobile_recording_path) if self._mobile_recording_path else "",
             })
 
+        @app.get("/api/mobile/posture_alert")
+        async def get_mobile_posture_alert():
+            """PC端轮询：获取并消费手机端姿态提醒"""
+            alert = self._mobile_posture_alert
+            self._mobile_posture_alert = None
+            return JSONResponse(alert if alert else {"type": "none"})
+
         @app.post("/api/mobile/audio")
         async def upload_mobile_audio(audio: UploadFile = File(...)):
             """手机端上传录制的音频文件（WebM/Opus → WAV）"""
@@ -459,6 +475,12 @@ class WebServer:
                 dead.add(ws)
         self.mobile_ws_clients -= dead
 
+    def get_mobile_posture_alert(self) -> Optional[Dict]:
+        """获取并消费手机端姿态提醒"""
+        alert = self._mobile_posture_alert
+        self._mobile_posture_alert = None
+        return alert
+
     # ── 手机端视频帧录制（后台线程） ──
 
     def _handle_mobile_frame_b64(self, b64_data: str):
@@ -478,7 +500,7 @@ class WebServer:
         self._enqueue_mobile_frame(raw_bytes)
 
     def _enqueue_mobile_frame(self, jpeg_bytes: bytes):
-        """将 JPEG 字节推入录制队列"""
+        """将 JPEG 字节推入录制队列，并对采样帧做头部高度分析"""
         with self._mobile_lock:
             if not self._mobile_recording or self._mobile_frame_queue is None:
                 return
@@ -493,6 +515,98 @@ class WebServer:
                 self._mobile_frame_queue.put_nowait(jpeg_bytes)
             except queue.Full:
                 pass
+
+        # 采样分析（每 N 帧检测一次，仅录制时）
+        self._mobile_pose_frame_count += 1
+        if self._mobile_pose_frame_count % self._mobile_pose_skip == 0:
+            try:
+                self._analyze_mobile_head_height(jpeg_bytes)
+            except Exception as e:
+                logger.debug(f"手机端头部高度分析异常: {e}")
+
+    def _init_mp_pose(self):
+        """懒加载 MediaPipe Pose（Lite 模型，不阻塞）"""
+        if self._mp_pose is None:
+            try:
+                import mediapipe as mp
+                self._mp_pose = mp.solutions.pose.Pose(
+                    static_image_mode=True,
+                    model_complexity=0,  # Lite 模型加速
+                    min_detection_confidence=0.5,
+                )
+                logger.info("手机端 MediaPipe Pose 已初始化（Lite 模型）")
+            except Exception as e:
+                logger.warning(f"手机端 MediaPipe Pose 初始化失败: {e}")
+
+    def _analyze_mobile_head_height(self, jpeg_bytes: bytes):
+        """分析手机端帧中头部高度，检测是否太低"""
+        import time as _time
+        now = _time.time()
+
+        # 冷却检查
+        if now - self._last_mobile_alert_time < self._mobile_alert_cooldown:
+            return
+
+        # 懒加载 Pose
+        self._init_mp_pose()
+        if self._mp_pose is None:
+            return
+
+        # 解码 JPEG
+        frame = cv2.imdecode(np.frombuffer(jpeg_bytes, np.uint8), cv2.IMREAD_COLOR)
+        if frame is None:
+            return
+
+        h, w = frame.shape[:2]
+
+        # 下采样到 320px 宽加速
+        if w > 320:
+            scale = 320.0 / w
+            frame = cv2.resize(frame, (320, int(h * scale)))
+            h, w = frame.shape[:2]
+
+        # MediaPipe Pose 检测
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = self._mp_pose.process(rgb)
+
+        if not results.pose_landmarks:
+            return
+
+        landmarks = results.pose_landmarks.landmark
+
+        # 关键点：0=鼻子, 11=左肩, 12=右肩
+        nose = landmarks[0]
+        left_shoulder = landmarks[11]
+        right_shoulder = landmarks[12]
+
+        if nose.visibility < 0.5:
+            return
+
+        nose_y = nose.y
+        shoulder_mid_y = (left_shoulder.y + right_shoulder.y) / 2
+
+        # 头部相对画面位置
+        head_ratio = nose_y / h
+
+        # 判定1：头在画面下半部分（太低）
+        head_too_low = head_ratio > 0.55
+
+        # 判定2：鼻子与肩膀距离太近（趴桌特征）
+        nose_shoulder_diff = nose_y - shoulder_mid_y
+        diff_ratio = nose_shoulder_diff / h
+        head_near_shoulder = diff_ratio > -0.02  # 几乎同一水平线
+
+        if head_too_low or head_near_shoulder:
+            self._last_mobile_alert_time = now
+            self._mobile_posture_alert = {
+                "type": "posture_alert",
+                "alert": "head_too_low",
+                "message": "抬起来一些",
+            }
+            logger.info(
+                f"手机端检测到头太低: head_ratio={head_ratio:.3f}, "
+                f"diff_ratio={diff_ratio:.3f}"
+            )
 
     def _mobile_writer_loop(self):
         """后台写线程：从队列取 JPEG 帧 → 解码 → 写入 MP4"""

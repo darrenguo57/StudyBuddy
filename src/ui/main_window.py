@@ -838,6 +838,10 @@ class MainWindow(QMainWindow):
             # 专注度 UI 更新
             self._update_focus_status()
 
+            # 手机端姿态提醒检查（每5秒轮询一次）
+            if self._session_seconds % 5 == 0:
+                self._check_mobile_posture_alert()
+
             # 鼓励语音
             if minutes > 0 and minutes % 15 == 0 and seconds == 0:
                 self.voice.encourage(minutes)
@@ -1011,6 +1015,11 @@ class MainWindow(QMainWindow):
             reminds=self._reminder_count,
             corrected=self._correction_count,
         )
+
+        # 实时合规率显示
+        if hasattr(self, 'detector') and self.detector is not None:
+            ratio = self.detector.get_compliance_ratio()
+            self.status_panel.set_compliance_info(f"合规率 {ratio*100:.0f}%")
 
     def _simulate_posture_update(self):
         """（已废弃：真实检测已接入 _update_posture_status）"""
@@ -1307,6 +1316,35 @@ class MainWindow(QMainWindow):
                 logger.warning(f"手机端视频文件过小({file_size}B)，忽略")
                 mobile_path = ""
         return mobile_path
+
+    def _check_mobile_posture_alert(self):
+        """轮询服务器获取手机端姿态提醒"""
+        try:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            req = urllib.request.Request(
+                "https://localhost:8910/api/mobile/posture_alert",
+                method="GET",
+            )
+            resp = urllib.request.urlopen(req, timeout=3, context=ctx)
+            result = json.loads(resp.read().decode())
+            if result.get("type") == "posture_alert" and result.get("alert") == "head_too_low":
+                self.voice.remind_violation("head_too_low")
+                # 记录到违规事件
+                with self._posture_lock:
+                    self._posture_events.append({
+                        "timestamp": time.time(),
+                        "violation_type": "head_too_low_mobile",
+                        "severity": "warning",
+                        "angle": 0,
+                        "reminded": 1,
+                        "corrected": 0,
+                        "corrected_time": 0,
+                    })
+                logger.info("收到手机端姿态提醒：头太低了")
+        except Exception:
+            pass
 
     def closeEvent(self, event):
         """关闭窗口"""

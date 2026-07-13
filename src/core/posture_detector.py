@@ -47,6 +47,15 @@ class PostureResult:
 class PostureDetector:
     """坐姿检测器 - 增强版"""
 
+    # 基准校准阈值（对应用户提供的正确坐姿照片）
+    # 照片特征：头部前倾较重、靠近桌面，以此作为"合格"基准
+    CALIBRATED_THRESHOLDS = {
+        'head_forward': 45,       # 原25°→放宽到45°（照片中头部前倾约35-40°）
+        'head_tilt': 20,          # 原12°→放宽到20°
+        'body_tilt': 18,          # 原10°→放宽到18°
+        'too_close_z': -0.03,     # 原-0.12→放宽到-0.03（允许更靠近桌面）
+    }
+
     # MediaPipe 关键点索引
     NOSE = 0
     LEFT_EYE = 2
@@ -95,23 +104,36 @@ class PostureDetector:
         }
         self._buffer_size = 5
 
+        # 基准校准模式（默认启用）
+        self._calibrated = True
+        self._compliance_target = 0.70
+        self._compliance_history: List[bool] = []
+        self._compliance_history_size = 50  # 最近50帧
+
     # ── 配置参数 ──
 
     @property
     def head_forward_threshold(self) -> float:
+        if self._calibrated:
+            return self.CALIBRATED_THRESHOLDS.get("head_forward", 45)
         return self.config.get("head_forward_angle", 25)
 
     @property
     def head_tilt_threshold(self) -> float:
+        if self._calibrated:
+            return self.CALIBRATED_THRESHOLDS.get("head_tilt", 20)
         return self.config.get("head_tilt_angle", 12)
 
     @property
     def body_tilt_threshold(self) -> float:
+        if self._calibrated:
+            return self.CALIBRATED_THRESHOLDS.get("body_tilt", 18)
         return self.config.get("body_tilt_angle", 10)
 
     @property
     def too_close_z(self) -> float:
-        # z 值在 MediaPipe 中是归一化的，-0.15 约等于 30-40cm
+        if self._calibrated:
+            return self.CALIBRATED_THRESHOLDS.get("too_close_z", -0.03)
         return self.config.get("too_close_z", -0.12)
 
     @property
@@ -175,6 +197,7 @@ class PostureDetector:
         self.missing_frame_count = 0
         for key in self._angle_buffer:
             self._angle_buffer[key].clear()
+        self._compliance_history.clear()
 
     def draw_landmarks(self, frame: np.ndarray, landmarks) -> np.ndarray:
         self.mp_draw.draw_landmarks(
@@ -306,6 +329,7 @@ class PostureDetector:
             ))
 
         result.compliance = len(result.violations) == 0
+        self._track_compliance(result.compliance)
         return result
 
     def _update_state(self, posture: PostureResult):
@@ -363,6 +387,26 @@ class PostureDetector:
         if horizontal_dist < 1e-9:
             return 0.0
         return math.degrees(math.atan2(horizontal_dist, vertical_dist))
+
+    def _track_compliance(self, is_compliant: bool):
+        """记录每帧合规状态"""
+        self._compliance_history.append(is_compliant)
+        if len(self._compliance_history) > self._compliance_history_size:
+            self._compliance_history.pop(0)
+
+    def get_compliance_ratio(self) -> float:
+        """返回最近N帧中合规帧的比例（0.0~1.0）"""
+        if not self._compliance_history:
+            return 1.0
+        return sum(self._compliance_history) / len(self._compliance_history)
+
+    @property
+    def is_calibrated(self) -> bool:
+        return self._calibrated
+
+    def set_calibrated_mode(self, enabled: bool):
+        """启用/禁用基准校准模式"""
+        self._calibrated = enabled
 
     def release(self):
         if hasattr(self, 'pose'):
