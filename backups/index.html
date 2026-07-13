@@ -258,7 +258,6 @@ const STATE = {
   canvasCtx: null,
   ws: null,
   connected: false,
-  _wsConnecting: false,      // 防重入标志，防止短时间内重复建连
   streamFPS: 15,
   audioRecorder: null,       // MediaRecorder for audio
   audioChunks: [],           // collected audio blobs
@@ -285,20 +284,15 @@ function setupTabs() {
 
 // ========== WebSocket ==========
 function connectWS() {
-  if (STATE._wsConnecting) return;  // 防重入：已在建连中，跳过
-  STATE._wsConnecting = true;
-
   const wsUrl = STATE.serverUrl.replace('http', 'ws') + '/ws/mobile';
   STATE.ws = new WebSocket(wsUrl);
   STATE.ws.binaryType = 'arraybuffer';
   STATE.ws.onopen = () => {
     STATE.connected = true;
-    STATE._wsConnecting = false;
     document.getElementById('statusDot').style.background = 'var(--accent2)';
   };
   STATE.ws.onclose = () => {
     STATE.connected = false;
-    STATE._wsConnecting = false;
     document.getElementById('statusDot').style.background = '#FF3B30';
     if (STATE.isRecording) stopMobileRecording();
     setTimeout(connectWS, 3000);
@@ -332,10 +326,7 @@ async function handleWSMessage(msg) {
 
 // ========== 手机端自动录制 ==========
 async function startMobileRecording() {
-  if (STATE.isRecording) {
-    console.warn('startMobileRecording: 已在录制中，忽略重复启动请求');
-    return;
-  }
+  if (STATE.isRecording) return;
 
   // 创建离屏 canvas 用于帧捕获
   STATE.canvas = document.createElement('canvas');

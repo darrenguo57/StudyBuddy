@@ -117,7 +117,7 @@ class VideoClipper:
         main_clip = VideoFileClip(str(main_video_path))
         duration = main_clip.duration
         resolution = main_clip.size
-        logger.info(f"主视频: {duration:.1f}s, {resolution}, 后处理合成={'是' if has_mobile else '否'}（PiP已由录制端合成）")
+        logger.info(f"主视频: {duration:.1f}s, {resolution}, 手机端={'是' if has_mobile else '否'}")
 
         # 1. 划分片段
         self._report("分析违规片段...", 5, progress_callback)

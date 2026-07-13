@@ -299,21 +299,18 @@ class CameraManager:
 
         if self._check_mobile_connected():
             wait_start = time.time()
-            while time.time() - wait_start < 5.0:
+            while time.time() - wait_start < 3.0:
                 mobile_frame = self._get_mobile_frame()
                 if mobile_frame is not None:
                     mh, mw = mobile_frame.shape[:2]
-                    elapsed = time.time() - wait_start
-                    logger.info(f"录制模式：手机竖屏主画布 ({mw}x{mh}) + PC 画中画（首帧到达耗时 {elapsed:.1f}s）")
+                    logger.info(f"录制模式：手机竖屏主画布 ({mw}x{mh}) + PC 画中画")
                     self._use_mobile_canvas = True
                     self._mobile_canvas_size = (mw, mh)
                     break
-                elapsed = time.time() - wait_start
-                logger.debug(f"等待手机首帧... (已等 {elapsed:.1f}s)")
-                time.sleep(0.5)
+                time.sleep(0.1)
 
             if not self._use_mobile_canvas:
-                logger.info("手机首帧超时(5秒)，回退PC横屏。请确认手机端已授权摄像头权限")
+                logger.info("等待手机首帧超时（3秒），回退为 PC 横屏模式")
             else:
                 pass
         else:
@@ -485,13 +482,13 @@ class CameraManager:
                         logger.debug(f"[写线程] 存活, 已写入 {self._frame_count} 帧, 队列={self._record_queue.qsize()}")
                         last_hb = time.time()
 
-                    # 合成画中画（运行时动态检测手机帧，自动切换）
-                    frame = self._compose_frame(frame)
-
                     # 帧尺寸校验（合成后尺寸应与画布一致）
                     fh, fw = frame.shape[:2]
                     if fw != canvas_w or fh != canvas_h:
                         frame = cv2.resize(frame, (canvas_w, canvas_h))
+
+                    # 合成画中画（运行时动态检测手机帧，自动切换）
+                    frame = self._compose_frame(frame)
 
                     if proc is not None:
                         try:
@@ -604,8 +601,8 @@ class CameraManager:
                 mobile_resized = cv2.resize(mobile_img, (canvas_w, canvas_h))
                 canvas = mobile_resized
 
-                # PC 画面缩放到画布宽度的 70%，右下角
-                pip_w = int(canvas_w * 0.70)
+                # PC 画面缩放到画布宽度的 35%，右下角
+                pip_w = int(canvas_w * 0.35)
                 pip_h = int(pc_frame.shape[0] * pip_w / pc_frame.shape[1])
                 pc_resized = cv2.resize(pc_frame, (pip_w, pip_h))
 

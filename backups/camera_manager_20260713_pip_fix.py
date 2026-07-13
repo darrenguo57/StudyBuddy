@@ -293,33 +293,11 @@ class CameraManager:
         path = self.recording_dir / f"session_{timestamp}.mp4"
         self.last_recording_path = path
 
-        # 检测手机端并等待首帧（最多 3 秒），决定画布模式
-        self._use_mobile_canvas = False
-        self._mobile_canvas_size = None
-
-        if self._check_mobile_connected():
-            wait_start = time.time()
-            while time.time() - wait_start < 5.0:
-                mobile_frame = self._get_mobile_frame()
-                if mobile_frame is not None:
-                    mh, mw = mobile_frame.shape[:2]
-                    elapsed = time.time() - wait_start
-                    logger.info(f"录制模式：手机竖屏主画布 ({mw}x{mh}) + PC 画中画（首帧到达耗时 {elapsed:.1f}s）")
-                    self._use_mobile_canvas = True
-                    self._mobile_canvas_size = (mw, mh)
-                    break
-                elapsed = time.time() - wait_start
-                logger.debug(f"等待手机首帧... (已等 {elapsed:.1f}s)")
-                time.sleep(0.5)
-
-            if not self._use_mobile_canvas:
-                logger.info("手机首帧超时(5秒)，回退PC横屏。请确认手机端已授权摄像头权限")
-            else:
-                pass
-        else:
-            logger.debug("手机端未连接，按 PC 横屏模式录制")
-
-        has_mobile = self._use_mobile_canvas
+        # 检测手机端是否已连接且有实际帧到达
+        has_mobile = self._check_mobile_connected()
+        if has_mobile and self._get_mobile_frame() is None:
+            logger.info("手机端已连接但首帧尚未到达，暂按 PC 横屏模式录制")
+            has_mobile = False
 
         # 创建录制队列和写线程
         self._record_queue = queue.Queue(maxsize=60)
@@ -338,7 +316,7 @@ class CameraManager:
         self._recording_start = time.time()
         self._last_record_time = 0.0
         self.is_recording = True
-        self._mobile_pip_logged = False  # 每次录制重置 PiP 切换日志标记
+        self._mobile_pip_logged = False  # Fix 4: 每次录制重置 PiP 切换日志标记
         logger.info(f"录制已启动: {path} ({actual_w}x{actual_h})")
         return path
 
@@ -435,10 +413,9 @@ class CameraManager:
                         logger.error(f"FFmpeg 命令: {' '.join(cmd)}")
                         proc = None
                     else:
-                        mode = "手机竖屏主画布" if has_mobile else "PC横屏"
-                        logger.debug(
+                        logger.info(
                             f"FFmpeg 管道已启动 (H.264, CRF23, {input_fps}fps, "
-                            f"画布={canvas_w}x{canvas_h}, 模式={mode}): {path}"
+                            f"画布={canvas_w}x{canvas_h}, 手机={'是' if has_mobile else '否'}): {path}"
                         )
 
                 if proc is None:
@@ -482,16 +459,16 @@ class CameraManager:
                         continue
 
                     if time.time() - last_hb > 5.0:
-                        logger.debug(f"[写线程] 存活, 已写入 {self._frame_count} 帧, 队列={self._record_queue.qsize()}")
+                        logger.info(f"[写线程] 存活, 已写入 {self._frame_count} 帧, 队列={self._record_queue.qsize()}")
                         last_hb = time.time()
+
+                    # 帧尺寸校验
+                    fh, fw = frame.shape[:2]
+                    if fw != source_w or fh != source_h:
+                        frame = cv2.resize(frame, (source_w, source_h))
 
                     # 合成画中画（运行时动态检测手机帧，自动切换）
                     frame = self._compose_frame(frame)
-
-                    # 帧尺寸校验（合成后尺寸应与画布一致）
-                    fh, fw = frame.shape[:2]
-                    if fw != canvas_w or fh != canvas_h:
-                        frame = cv2.resize(frame, (canvas_w, canvas_h))
 
                     if proc is not None:
                         try:
@@ -583,8 +560,7 @@ class CameraManager:
         """合成最终输出帧。运行时动态检测手机帧，自动切换画中画模式。
 
         - 无手机帧：PC 横屏直出
-        - 有手机帧 + 手机竖屏主画布模式：手机帧填充画布，PC 右下角 PiP
-        - 有手机帧 + PC横屏模式：PC 主画布，手机右下角 PiP（回退兼容）
+        - 有手机帧：在 PC 画面右下角叠加手机 PiP，首次切换时打印日志
         """
         mobile_img = self._get_mobile_frame()
         if mobile_img is None:
@@ -596,43 +572,23 @@ class CameraManager:
             logger.info("检测到手机首帧，切换到画中画合成模式")
 
         try:
-            use_mobile_canvas = getattr(self, '_use_mobile_canvas', False)
+            ph, pw = pc_frame.shape[:2]    # PC 画布尺寸
+            mh, mw = mobile_img.shape[:2]  # 手机帧尺寸
 
-            if use_mobile_canvas and self._mobile_canvas_size:
-                # ── 手机竖屏主画布 + PC 右下角 PiP ──
-                canvas_w, canvas_h = self._mobile_canvas_size
-                mobile_resized = cv2.resize(mobile_img, (canvas_w, canvas_h))
-                canvas = mobile_resized
+            # 手机画面缩小为右下角 PiP（宽度占画布 25%）
+            pip_w = int(pw * 0.25)
+            pip_h = int(mh * pip_w / mw)
+            mobile_resized = cv2.resize(mobile_img, (pip_w, pip_h))
 
-                # PC 画面缩放到画布宽度的 70%，右下角
-                pip_w = int(canvas_w * 0.70)
-                pip_h = int(pc_frame.shape[0] * pip_w / pc_frame.shape[1])
-                pc_resized = cv2.resize(pc_frame, (pip_w, pip_h))
+            x_offset = pw - pip_w - 20   # 右边距 20px
+            y_offset = ph - pip_h - 20   # 下边距 20px
 
-                x_offset = canvas_w - pip_w - 20
-                y_offset = canvas_h - pip_h - 20
-
-                cv2.rectangle(canvas, (x_offset - 2, y_offset - 2),
-                              (x_offset + pip_w + 2, y_offset + pip_h + 2), (255, 255, 255), 2)
-                canvas[y_offset:y_offset + pip_h, x_offset:x_offset + pip_w] = pc_resized
-                return canvas
-            else:
-                # ── PC 横屏主画布 + 手机右下角 PiP（回退兼容） ──
-                ph, pw = pc_frame.shape[:2]
-                mh, mw = mobile_img.shape[:2]
-
-                pip_w = int(pw * 0.40)
-                pip_h = int(mh * pip_w / mw)
-                mobile_resized = cv2.resize(mobile_img, (pip_w, pip_h))
-
-                x_offset = pw - pip_w - 20
-                y_offset = ph - pip_h - 20
-
-                canvas = pc_frame.copy()
-                cv2.rectangle(canvas, (x_offset - 2, y_offset - 2),
-                              (x_offset + pip_w + 2, y_offset + pip_h + 2), (255, 255, 255), 2)
-                canvas[y_offset:y_offset + pip_h, x_offset:x_offset + pip_w] = mobile_resized
-                return canvas
+            canvas = pc_frame.copy()
+            # 白色边框
+            cv2.rectangle(canvas, (x_offset - 2, y_offset - 2),
+                          (x_offset + pip_w + 2, y_offset + pip_h + 2), (255, 255, 255), 2)
+            canvas[y_offset:y_offset + pip_h, x_offset:x_offset + pip_w] = mobile_resized
+            return canvas
         except Exception:
             return pc_frame
 

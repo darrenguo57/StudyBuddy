@@ -234,7 +234,7 @@ def parse_schedule(html_path: str) -> List[DayPlan]:
         )
         plans.append(plan)
 
-    logger.info(f"解析完成: {len(plans)} 天作业计划")
+    logger.debug(f"解析完成: {len(plans)} 天作业计划")
     return plans
 
 

@@ -83,7 +83,8 @@ class WebServer:
         self._first_frame_received = False
         self._mobile_ws_connected = False  # WebSocket 连接状态
 
-        # WebSocket IP 去重已移除 — 避免 start 指令发错连接导致 0 帧
+        # WebSocket IP 去重映射（Fix 1）
+        self._ws_ip_map: dict = {}
 
         # 视频帧接收回调（由 CameraManager 处理）
         self.on_mobile_frame = None
@@ -264,15 +265,13 @@ class WebServer:
             self._first_frame_received = False
             self._mobile_recording = True
 
-            # 向所有 mobile_ws_clients 广播启动录制指令，并清理已断开连接
-            dead = set()
-            for ws in self.mobile_ws_clients:
+            # Fix 2: 只发给第一个移动端客户端（去重后仅1个），不再广播
+            if self.mobile_ws_clients:
+                first_ws = next(iter(self.mobile_ws_clients))
                 try:
-                    await ws.send_json({"type": "start_mobile_recording"})
+                    await first_ws.send_json({"type": "start_mobile_recording"})
                 except Exception as e:
                     logger.error(f"发送录制启动消息到手机端失败: {e}")
-                    dead.add(ws)
-            self.mobile_ws_clients -= dead
 
             logger.info(f"手机端录制已启动（帧共享模式）: {self._mobile_recording_path}")
             return JSONResponse({
@@ -337,14 +336,26 @@ class WebServer:
             """手机端 WebSocket：视频推流 + 双向通信"""
             await ws.accept()
 
+            # ── Fix 1: WebSocket 连接去重（基于来源 IP） ──
+            client_ip = ws.client.host if (hasattr(ws, 'client') and ws.client) else "unknown"
+            if client_ip != "unknown" and client_ip in self._ws_ip_map:
+                old_ws = self._ws_ip_map[client_ip]
+                logger.info(f"关闭旧连接(重复): IP={client_ip}")
+                try:
+                    await old_ws.close(code=1000, reason="duplicate connection")
+                except Exception:
+                    pass
+                self.mobile_ws_clients.discard(old_ws)
+
             self.mobile_ws_clients.add(ws)
             self._mobile_ws_connected = True
             globals()['_mobile_ws_connected'] = True
-            logger.info(f"新移动端连接 (当前 {len(self.mobile_ws_clients)} 个客户端)")
+            self._ws_ip_map[client_ip] = ws
+            logger.info(f"新移动端连接: IP={client_ip} (当前 {len(self.mobile_ws_clients)} 个客户端)")
 
             # ── Fix 3: 录制状态同步 ──
             if self._mobile_recording:
-                logger.info(f"录制状态同步：当前正在录制，通知新连接")
+                logger.info(f"录制状态同步：当前正在录制，通知新连接 IP={client_ip}")
                 try:
                     await ws.send_json({"type": "start_mobile_recording"})
                 except Exception as e:
@@ -398,6 +409,9 @@ class WebServer:
                 logger.error(f"WebSocket 异常: {e}")
             finally:
                 self.mobile_ws_clients.discard(ws)
+                # 清理 IP 映射（仅当映射仍指向当前连接时）
+                if self._ws_ip_map.get(client_ip) is ws:
+                    del self._ws_ip_map[client_ip]
                 self._mobile_ws_connected = bool(self.mobile_ws_clients)
                 globals()['_mobile_ws_connected'] = bool(self.mobile_ws_clients)
                 logger.info(f"手机端已断开 (剩余 {len(self.mobile_ws_clients)} 个客户端)")

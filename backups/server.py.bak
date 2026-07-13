@@ -83,8 +83,6 @@ class WebServer:
         self._first_frame_received = False
         self._mobile_ws_connected = False  # WebSocket 连接状态
 
-        # WebSocket IP 去重已移除 — 避免 start 指令发错连接导致 0 帧
-
         # 视频帧接收回调（由 CameraManager 处理）
         self.on_mobile_frame = None
 
@@ -264,15 +262,8 @@ class WebServer:
             self._first_frame_received = False
             self._mobile_recording = True
 
-            # 向所有 mobile_ws_clients 广播启动录制指令，并清理已断开连接
-            dead = set()
-            for ws in self.mobile_ws_clients:
-                try:
-                    await ws.send_json({"type": "start_mobile_recording"})
-                except Exception as e:
-                    logger.error(f"发送录制启动消息到手机端失败: {e}")
-                    dead.add(ws)
-            self.mobile_ws_clients -= dead
+            # 广播给所有手机端：开始录制
+            await self.broadcast({"type": "start_mobile_recording"})
 
             logger.info(f"手机端录制已启动（帧共享模式）: {self._mobile_recording_path}")
             return JSONResponse({
@@ -336,19 +327,10 @@ class WebServer:
         async def mobile_websocket(ws: WebSocket):
             """手机端 WebSocket：视频推流 + 双向通信"""
             await ws.accept()
-
             self.mobile_ws_clients.add(ws)
             self._mobile_ws_connected = True
             globals()['_mobile_ws_connected'] = True
-            logger.info(f"新移动端连接 (当前 {len(self.mobile_ws_clients)} 个客户端)")
-
-            # ── Fix 3: 录制状态同步 ──
-            if self._mobile_recording:
-                logger.info(f"录制状态同步：当前正在录制，通知新连接")
-                try:
-                    await ws.send_json({"type": "start_mobile_recording"})
-                except Exception as e:
-                    logger.error(f"通知新连接录制状态失败: {e}")
+            logger.info(f"手机端已连接 (当前 {len(self.mobile_ws_clients)} 个客户端)")
 
             try:
                 while True:
@@ -427,7 +409,7 @@ class WebServer:
                 for p in plans
             ]
             self._schedule_loaded = True
-            logger.debug(f"排程已加载: {len(self.schedule_data)} 天")
+            logger.info(f"排程已加载: {len(self.schedule_data)} 天")
         except Exception as e:
             logger.error(f"加载排程失败: {e}")
             self._schedule_loaded = True
@@ -695,7 +677,7 @@ class WebServer:
                 "alert": "head_too_low",
                 "message": "抬起来一些",
             }
-            logger.debug(
+            logger.info(
                 f"手机端检测到头太低: head_ratio={head_ratio:.3f}, "
                 f"diff_ratio={diff_ratio:.3f}"
             )

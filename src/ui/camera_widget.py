@@ -131,12 +131,12 @@ class CameraWidget(QFrame):
                     border: 1px solid {SEPARATOR};
                     border-radius: {RADIUS['lg']};
                 """)
-                logger.info("摄像头预览帧开始渲染")
+                logger.debug("摄像头预览帧开始渲染")
 
             # 调试：记录帧属性（仅首次）
             if not hasattr(self, "_logged_frame_info"):
                 self._logged_frame_info = True
-                logger.info(f"预览帧属性: shape={frame.shape}, dtype={frame.dtype}, "
+                logger.debug(f"预览帧属性: shape={frame.shape}, dtype={frame.dtype}, "
                            f"min={frame.min()}, max={frame.max()}, mean={frame.mean():.1f}")
 
             # 统一转换为 BGR（3 通道），CameraManager 已保证 BGR 输出

@@ -719,19 +719,6 @@ class MainWindow(QMainWindow):
             )
 
         self._session_id = self.db.create_session()
-
-        # 先通知手机端启动摄像头，让首帧在录制等待期间到达
-        mobile_connected = False
-        try:
-            from web.server import _mobile_ws_connected
-            mobile_connected = _mobile_ws_connected
-        except Exception:
-            pass
-
-        if mobile_connected:
-            self._notify_mobile_start()
-            time.sleep(1.0)  # 等待手机端初始化摄像头
-
         self.camera.start_recording()
         self.detector.reset_session()
         self.focus_detector.reset()
@@ -769,6 +756,9 @@ class MainWindow(QMainWindow):
 
         self._refresh_history()
         logger.info(f"Session {self._session_id} started")
+
+        # 通知手机端开始录制
+        self._notify_mobile_start()
 
         # 开始循环播放 BGM
         self._start_bgm()
