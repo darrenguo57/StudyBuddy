@@ -609,8 +609,8 @@ class CameraManager:
                 pip_h = int(pc_frame.shape[0] * pip_w / pc_frame.shape[1])
                 pc_resized = cv2.resize(pc_frame, (pip_w, pip_h))
 
-                x_offset = canvas_w - pip_w - 20
-                y_offset = canvas_h - pip_h - 20
+                x_offset = canvas_w - pip_w
+                y_offset = canvas_h - pip_h
 
                 cv2.rectangle(canvas, (x_offset - 2, y_offset - 2),
                               (x_offset + pip_w + 2, y_offset + pip_h + 2), (255, 255, 255), 2)
